@@ -19,6 +19,13 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <queries>
+        <!-- Query SnapBridge so we can read its first-install time to recover its device ID -->
+        <package android:name="com.nikon.snapbridge.cmru" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -33,7 +40,8 @@
             android:name=".service.CameraConnectionService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location"
+            android:stopWithTask="false" />
 
         <activity
             android:name=".MainActivity"

@@ -22,6 +22,11 @@ data class PairingMessage(
         val buffer = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put(stage.toByte())
         buffer.putLong(timestamp)
+        // SnapBridge stores the 8-byte DeviceID as a raw byte array in the wire
+        // format (camera advertises its first 4 bytes, e.g. 44 5d 4b 24). The
+        // uint32 fields below must be the little-endian interpretation of those
+        // wire bytes; callers (e.g. SettingsRepository.fixedIdentity) reverse the
+        // hex string into that value before building the message.
         buffer.putInt((device and 0xFFFFFFFFL).toInt())
         buffer.putInt((nonce and 0xFFFFFFFFL).toInt())
         return buffer.array()

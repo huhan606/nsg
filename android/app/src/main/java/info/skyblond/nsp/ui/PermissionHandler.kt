@@ -63,6 +63,7 @@ object RequiredPermissions {
 @Composable
 fun PermissionHandler(
     modifier: Modifier = Modifier,
+    onPermissionsGranted: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -71,6 +72,9 @@ fun PermissionHandler(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         granted = result.values.all { it }
+        if (granted) {
+            onPermissionsGranted?.invoke()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -114,19 +118,19 @@ fun BluetoothEnableGate(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Bluetooth is required to connect to the camera.",
+                text = L10n.t("连接相机需要开启蓝牙。", "Bluetooth is required to connect to the camera."),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { launcher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }) {
-                Text("Enable Bluetooth")
+                Text(L10n.t("开启蓝牙", "Enable Bluetooth"))
             }
             Spacer(modifier = Modifier.height(8.dp))
             Button(onClick = {
                 context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             }) {
-                Text("Open Bluetooth Settings")
+                Text(L10n.t("打开蓝牙设置", "Open Bluetooth settings"))
             }
         }
     }
@@ -145,13 +149,16 @@ private fun PermissionRationale(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "This app needs Bluetooth and Location permissions to scan for and connect to the Nikon camera.",
+            text = L10n.t(
+                "本应用需要蓝牙和定位权限，用于扫描并连接尼康相机。",
+                "This app needs Bluetooth and location permissions to scan for and connect to your Nikon camera."
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onRequest) {
-            Text("Grant Permissions")
+            Text(L10n.t("授予权限", "Grant permissions"))
         }
     }
 }

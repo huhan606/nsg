@@ -10,13 +10,23 @@ With my new Z8, I'm thinking maybe I can made my own GPS using the 10 pin connec
 
 So for me, and other Chinese users, SnapBridge is the only way to feed GPS into the camera and geotagging the photo.
 
-## Android PoC
+## Android
 
-This project steals the reverse engineer result from [gkoh/furble](https://github.com/gkoh/furble). Initially I thought I have to go through the SnapBridge APK and capture the bluetooth package, but thankfully the community has already done that.
+The Android implementation is complete and ready to use. It is based on the reverse engineering from [gkoh/furble](https://github.com/gkoh/furble), and has been verified to work with the Nikon Z7 II (and should support any Z camera with SnapBridge smart-device mode).
 
-The Android PoC has been verified to work with both the Nikon Z50 II and Nikon Z8 over Bluetooth smart-device mode.
+It can pair with new cameras and connect to saved ones over Bluetooth, inject real GPS (plus network location) into the camera, run as a low-power foreground service in the background, and automatically recover the SnapBridge device ID so you can switch between this app and SnapBridge without deleting any pairing records.
 
-To first proof things works, I build an Android APP for testing. Once finished and verified things works, I'll buy a M5StackS3 and built a dedicated hardware for it, because again, my samsung phone doesn't have a big battery.
+Full documentation is in [android/README.md](android/README.md) (中文版见 [android/README.zh-CN.md](android/README.zh-CN.md)).
+
+- 中文版：[**使用教程**](android/README.zh-CN.md#%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B)
+- English: [**Usage Tutorial**](android/README.md#usage)
+
+This Android section is maintained by [HowenXu](https://github.com/HowenXu).
+
+> **中文版**：安卓端实现已完整可用。它基于 [gkoh/furble](https://github.com/gkoh/furble) 的逆向成果，已在尼康 Z7 II 上验证可用（理论上支持所有带 SnapBridge 智能设备模式的 Z 相机）。它可以配对全新相机并连接已保存的相机，通过蓝牙注入真实 GPS（含网络定位），以后台低功耗前台服务方式持续运行，并能自动恢复 SnapBridge 设备标识，让你在本应用与 SnapBridge 之间切换时无需删除任何配对记录。完整文档见 [android/README.md](android/README.md)（中文版见 [android/README.zh-CN.md](android/README.zh-CN.md)）。
+> - 中文版：[**使用教程**](android/README.zh-CN.md#%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B)
+> - English: [**Usage Tutorial**](android/README.md#usage)
+> - 本 Android 部分由 [HowenXu](https://github.com/HowenXu) 维护。
 
 ## Kotlin PoC (Linux only, require Bluez)
 
