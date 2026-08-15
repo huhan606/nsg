@@ -56,7 +56,6 @@ cd android
 
 | 环境 | 开发板 |
 |---|---|
-| `m5stack-core2-release` / `m5stack-core2-debug` | M5Stack Core2 |
 | `esp32-wroom-32e-release` / `esp32-wroom-32e-debug` | ESP32 WROOM 32E |
 | `native` | 宿主机（单元测试） |
 
