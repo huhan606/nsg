@@ -20,7 +20,7 @@ Supported GNSS:
 ## Software approach
 
 - Use PlatformIO with the Arduino framework.
-- The firmware targets a single custom board (ESP32 WROOM 32E), so hardware-specific behavior — boot-mode detection on pin 19, RTC handling, status logging — lives directly in the application code instead of behind a board abstraction layer.
+- The firmware targets a single custom board (ESP32 WROOM 32E), so hardware-specific behavior — boot-mode detection on pin 19, RGB status LED, RTC handling, status logging — lives directly in the application code instead of behind a board abstraction layer.
 - The core-1 `loop()` only processes GNSS UART + RTC time-sync and prints the status. All application-level BLE work (scan-queue handling, (re)connect/handshake, TIME/GEO broadcast) runs in a dedicated FreeRTOS task pinned to core 0 (`BleWorker`), so a (re)connect — which can block for up to 45s — never freezes the UI.
 - Drain the GPS serial buffer at the start of every loop so no NMEA data is missed.
 
@@ -68,8 +68,22 @@ Structure:
 
 The device has two modes:
 
-1. **Pairing mode** — enter by holding pin 19 (the exposed button) for 3 seconds in normal mode: the firmware writes an NVS flag and reboots into pairing mode, clearing the flag on the way in. Shorting pin 19 to GND during the 2-second boot detection window remains as a fallback. Scans for a new Nikon camera, runs the 4-stage BLE handshake, bonds over Bluetooth Classic, and saves the camera info. Holding the button for 3 seconds inside pairing mode reboots back to normal mode.
+1. **Pairing mode** — enter by holding pin 19 (the exposed button) for 3 seconds in normal mode: the firmware writes an NVS flag and reboots into pairing mode, clearing the flag on the way in. Shorting pin 19 to GND during the 3-second boot detection window remains as a fallback (that window doubles as the RGB LED self-check: R, G, B each light up for one second). Scans for a new Nikon camera, runs the 4-stage BLE handshake, bonds over Bluetooth Classic, and saves the camera info. Holding the button for 3 seconds inside pairing mode reboots back to normal mode.
 2. **Normal mode** — the default. Scans for saved cameras, reconnects when in range, and sends the 41-byte GPS payload to the camera whenever a fresh GPS fix is available. Should support multiple cameras connecting at the same time.
+
+## Status LED
+
+The RGB status LED (`src/common/StatusLED.h`, global `statusLed`) is wired common anode — `STATUS_LED_ON = 0`, `STATUS_LED_OFF = 255`. Pin and level build flags: `STATUS_LED_PIN_R/G/B`, `STATUS_LED_ON/OFF`.
+
+| Context | LED state |
+|---|---|
+| Boot self-check (GPIO-19 path) | R 1s → G 1s → B 1s, then off |
+| Normal mode, no camera connected | G on |
+| Normal mode, camera connected | G + B on |
+| Pairing mode, scanning | R on |
+| Pairing mode, handshake/pairing in progress | R + B on |
+| Pairing mode, waiting for code confirmation on camera | R on, B blinking (1 Hz) |
+| Pairing mode, fatal failure | R + G + B on (power cycle required) |
 
 ## RTC
 

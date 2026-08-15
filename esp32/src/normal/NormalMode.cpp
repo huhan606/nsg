@@ -7,6 +7,7 @@
 #include "Config.h"
 #include "Logging.h"
 #include "UBlox.h"
+#include "common/StatusLED.h"
 
 NormalMode::NormalMode() {}
 
@@ -78,7 +79,11 @@ void NormalMode::loop() {
 
     GnssSnapshot gnssSnapshot{lat, lon, altitude, satellites, gnssValid};
 
-    printStatus(gnssSnapshot, bleWorker.getBleStatusSnapshot());
+    BleStatusSnapshot bleStatus = bleWorker.getBleStatusSnapshot();
+    printStatus(gnssSnapshot, bleStatus);
+
+    // status LED: G on = normal mode, B on = at least one camera connected
+    statusLed.setColor(STATUS_LED_OFF, STATUS_LED_ON, bleStatus.activeConnections > 0 ? STATUS_LED_ON : STATUS_LED_OFF);
 
     // if we got update from GPS
     if (nmeaGotNewCommand) {

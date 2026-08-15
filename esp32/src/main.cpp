@@ -9,6 +9,7 @@
 #include "Logging.h"
 #include "Utils.h"
 #include "common/LongPressButton.h"
+#include "common/StatusLED.h"
 #include "normal/NormalMode.h"
 #include "pairing/PairingMode.h"
 
@@ -20,7 +21,7 @@ enum class BootModeEnum { PAIRING, NORMAL };
 #endif
 
 #ifndef BOOTMODE_DETECT_DELAY_MS
-#define BOOTMODE_DETECT_DELAY_MS 2000
+#define BOOTMODE_DETECT_DELAY_MS 3000
 #endif
 
 BootModeEnum bootModeType = BootModeEnum::NORMAL;
@@ -32,6 +33,8 @@ void setup() {
     // enable default serial as monitor
     Serial.begin(115200);
     NSG_LOG_DEBUG("MainSetup", "Serial initialized");
+    // RGB status LED: common anode, on = 0, off = 255
+    statusLed.begin();
 
     // init ESP32 internal RTC, use GMT timezone
     // (the system clock is backed by the internal RTC; no battery, so it
@@ -60,8 +63,18 @@ void setup() {
         bootModeType = BootModeEnum::PAIRING;
     } else {
         NSG_LOG_INFO("MainSetup", "Detecting boot mode... Short pin %d to GND to enter pairing mode", BOOTMODE_DETECT_PIN);
-        // wait for a while and read detect pin
-        delay(BOOTMODE_DETECT_DELAY_MS);
+        // LED self-check while waiting for the boot-mode detection window:
+        // R, G, B each light up for one second, then all off
+        const uint8_t selfCheck[3][3] = {
+            {STATUS_LED_ON, STATUS_LED_OFF, STATUS_LED_OFF},
+            {STATUS_LED_OFF, STATUS_LED_ON, STATUS_LED_OFF},
+            {STATUS_LED_OFF, STATUS_LED_OFF, STATUS_LED_ON},
+        };
+        for (const auto& colors : selfCheck) {
+            statusLed.setColor(colors[0], colors[1], colors[2]);
+            delay(BOOTMODE_DETECT_DELAY_MS / 3);
+        }
+        statusLed.setColor(STATUS_LED_OFF, STATUS_LED_OFF, STATUS_LED_OFF);
 
         // if short to GND (read 0) -> pairing mode
         if (!digitalRead(BOOTMODE_DETECT_PIN)) {
@@ -95,6 +108,7 @@ void setup() {
 }
 
 void loop() {
+
     // long-press handling: in normal mode, request pairing mode on the next
     // boot; in pairing mode, just reboot back to normal mode
     if (bootModeButton.update()) {

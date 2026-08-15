@@ -7,6 +7,7 @@
 #include "Config.h"
 #include "Logging.h"
 #include "Utils.h"
+#include "common/StatusLED.h"
 
 PairingMode::PairingMode() : state(State::SCANNING), scanner(nullptr), pClient(nullptr), classicBT(nullptr), cameraList(), selectedCameraIdx(0) {}
 
@@ -32,6 +33,18 @@ void PairingMode::loop() {
     // CODE_CONFIRM: user confirmed code, wait pairing result
     // SUCCESS: after pairing success, save camera info and reboot
     // FAIL: if any of the stage failed, jump to here and loop, user need to manually reset
+    // status LED: R on = pairing mode; B on from handshake until pairing
+    // finishes; B blinks at 1 Hz while waiting for the user to confirm the
+    // code on the camera; all channels on = fatal failure, power cycle required
+    if (state == State::FAIL) {
+        statusLed.setColor(STATUS_LED_ON, STATUS_LED_ON, STATUS_LED_ON);
+    } else if (state == State::CODE_CONFIRM) {
+        const bool blinkOn = (millis() / 500) % 2 == 0;
+        statusLed.setColor(STATUS_LED_ON, STATUS_LED_OFF, blinkOn ? STATUS_LED_ON : STATUS_LED_OFF);
+    } else {
+        const bool pairingStarted = state != State::SCANNING;
+        statusLed.setColor(STATUS_LED_ON, STATUS_LED_OFF, pairingStarted ? STATUS_LED_ON : STATUS_LED_OFF);
+    }
     switch (state) {
         case State::SCANNING:
             handleScanResults();
