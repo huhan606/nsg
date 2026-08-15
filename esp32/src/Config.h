@@ -29,6 +29,14 @@ std::vector<SavedCameraInfo> getSavedCameras();
 
 void addToSavedCameras(const SavedCameraInfo& cameraInfo);
 
+/**
+ * Flag written by the normal-mode long-press to request pairing mode on the
+ * next boot. Read once at boot and cleared before entering pairing mode.
+ */
+bool hasPairingFlag();
+void setPairingFlag();
+void clearPairingFlag();
+
 }  // namespace Config
 
 #endif  // CONFIG_H

@@ -106,3 +106,36 @@ void Config::addToSavedCameras(const SavedCameraInfo& cameraInfo) {
     nvs.putString("savedCameras", json.c_str());
     nvs.end();
 }
+
+bool Config::hasPairingFlag() {
+    Preferences nvs;
+    // read-only; a missing namespace (first boot / NVS erased) simply means no flag
+    if (!nvs.begin("nsg", true)) {
+        return false;
+    }
+    const bool result = nvs.getBool("pairingFlag", false);
+    nvs.end();
+    return result;
+}
+
+void Config::setPairingFlag() {
+    Preferences nvs;
+    if (!nvs.begin("nsg", false)) {
+        NSG_LOG_FATAL("Config::setPairingFlag", "Failed to open NVS");
+    }
+    if (!nvs.putBool("pairingFlag", true)) {
+        NSG_LOG_FATAL("Config::setPairingFlag", "Failed to save pairing flag to NVS");
+    }
+    nvs.end();
+}
+
+void Config::clearPairingFlag() {
+    Preferences nvs;
+    if (!nvs.begin("nsg", false)) {
+        NSG_LOG_FATAL("Config::clearPairingFlag", "Failed to open NVS");
+    }
+    if (!nvs.remove("pairingFlag")) {
+        NSG_LOG_WARN("Config::clearPairingFlag", "Failed to remove pairing flag from NVS; next boot may re-enter pairing mode");
+    }
+    nvs.end();
+}

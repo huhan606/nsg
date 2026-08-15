@@ -8,6 +8,7 @@
 #include "Esp32RandomGenerator.h"
 #include "Logging.h"
 #include "Utils.h"
+#include "common/LongPressButton.h"
 #include "normal/NormalMode.h"
 #include "pairing/PairingMode.h"
 
@@ -25,6 +26,7 @@ enum class BootModeEnum { PAIRING, NORMAL };
 BootModeEnum bootModeType = BootModeEnum::NORMAL;
 NormalMode* normalMode = nullptr;
 PairingMode* pairingMode = nullptr;
+LongPressButton bootModeButton(BOOTMODE_DETECT_PIN);
 
 void setup() {
     // enable default serial as monitor
@@ -38,7 +40,7 @@ void setup() {
     tzset();
     NSG_LOG_DEBUG("MainSetup", "Internal RTC initialized (TZ=GMT)");
     // setup pin for boot mode detection
-    pinMode(BOOTMODE_DETECT_PIN, INPUT_PULLUP);
+    bootModeButton.begin();
 
     // init BLE stack (required by both boot modes)
     Esp32RandomGenerator rnd;
@@ -50,17 +52,25 @@ void setup() {
     }
 
     // collect boot up mode
-    NSG_LOG_INFO("MainSetup", "Detecting boot mode... Short pin %d to GND to enter pairing mode", BOOTMODE_DETECT_PIN);
-    // wait for a while and read detect pin
-    delay(BOOTMODE_DETECT_DELAY_MS);
-
-    // if short to GND (read 0) -> pairing mode
-    if (!digitalRead(BOOTMODE_DETECT_PIN)) {
-        NSG_LOG_INFO("MainSetup", "Entering Pairing mode");
+    if (Config::hasPairingFlag()) {
+        // long-press in normal mode requested pairing; clear the flag so the
+        // reboot after pairing (or any later reboot) goes back to normal
+        Config::clearPairingFlag();
+        NSG_LOG_INFO("MainSetup", "Pairing flag set, entering Pairing mode");
         bootModeType = BootModeEnum::PAIRING;
     } else {
-        NSG_LOG_INFO("MainSetup", "Entering Normal mode");
-        bootModeType = BootModeEnum::NORMAL;
+        NSG_LOG_INFO("MainSetup", "Detecting boot mode... Short pin %d to GND to enter pairing mode", BOOTMODE_DETECT_PIN);
+        // wait for a while and read detect pin
+        delay(BOOTMODE_DETECT_DELAY_MS);
+
+        // if short to GND (read 0) -> pairing mode
+        if (!digitalRead(BOOTMODE_DETECT_PIN)) {
+            NSG_LOG_INFO("MainSetup", "Entering Pairing mode");
+            bootModeType = BootModeEnum::PAIRING;
+        } else {
+            NSG_LOG_INFO("MainSetup", "Entering Normal mode");
+            bootModeType = BootModeEnum::NORMAL;
+        }
     }
 
     switch (bootModeType) {
@@ -78,9 +88,25 @@ void setup() {
             NSG_LOG_FATAL("MainSetup", "Unexpected boot type");
             break;
     }
+
+    // discard any button state from before the reset (e.g. the boot-detect
+    // hold), so a button held through reboot doesn't long-press again
+    bootModeButton.reset();
 }
 
 void loop() {
+    // long-press handling: in normal mode, request pairing mode on the next
+    // boot; in pairing mode, just reboot back to normal mode
+    if (bootModeButton.update()) {
+        if (bootModeType == BootModeEnum::NORMAL) {
+            NSG_LOG_INFO("MainLoop", "Long press detected, rebooting into pairing mode...");
+            Config::setPairingFlag();
+        } else {
+            NSG_LOG_INFO("MainLoop", "Long press detected, rebooting into normal mode...");
+        }
+        ESP.restart();
+    }
+
     switch (bootModeType) {
         case BootModeEnum::NORMAL:
             if (normalMode) {
