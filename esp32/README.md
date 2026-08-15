@@ -20,8 +20,8 @@ Supported GNSS:
 ## Software approach
 
 - Use PlatformIO with the Arduino framework.
-- A board abstraction layer (`src/boards/Board.h`) decouples application logic from board-specific hardware. Each board provides its own implementation in `src/boards/<board>/Board.cpp`, and only the selected board's sources are compiled via `build_src_filter` in `platformio.ini`.
-- The core-1 `loop()` only processes GNSS UART + RTC time-sync and draws the screen. All application-level BLE work (scan-queue handling, (re)connect/handshake, TIME/GEO broadcast) runs in a dedicated FreeRTOS task pinned to core 0 (`BleWorker`), so a (re)connect — which can block for up to 45s — never freezes the UI.
+- The firmware targets a single custom board (ESP32 WROOM 32E), so hardware-specific behavior — boot-mode detection on pin 19, RTC handling, status logging — lives directly in the application code instead of behind a board abstraction layer.
+- The core-1 `loop()` only processes GNSS UART + RTC time-sync and prints the status. All application-level BLE work (scan-queue handling, (re)connect/handshake, TIME/GEO broadcast) runs in a dedicated FreeRTOS task pinned to core 0 (`BleWorker`), so a (re)connect — which can block for up to 45s — never freezes the UI.
 - Drain the GPS serial buffer at the start of every loop so no NMEA data is missed.
 
 ### Build environments
@@ -59,8 +59,7 @@ BLE worker task (core 0):
 + If got 0x80 or other error from camera, disconnect
 
 Structure:
-+ Board abstraction (`src/boards/Board.h`) — board-agnostic interface for setup, loop, pairing UI, normal mode status, and RTC access
-+ Board implementations (`src/boards/esp32-wroom-32e/`)
++ Snapshots (`src/normal/Snapshots.h`) — GNSS / RTC / BLE status data shared between the core-1 loop and the BLE worker
 + SavedCamera (camera name, device, nonce)
 + PendingCamera (camera name, address)
 + ConnectedCamera (camera name, last gps push)

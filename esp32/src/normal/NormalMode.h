@@ -6,6 +6,7 @@
 
 #include "BleWorker.h"
 #include "BootMode.h"
+#include "Snapshots.h"
 
 #ifndef UBLOX_GNSS_RX_PIN
 #define UBLOX_GNSS_RX_PIN 13
@@ -49,6 +50,9 @@ class NormalMode : public BootMode {
     char nmeaBuffer[128];
     MicroNMEA nmea = {nmeaBuffer, sizeof(nmeaBuffer)};
     uint32_t nmeaLastSync = 0;
+    uint32_t lastStatusPrint = 0;
+
+    void printStatus(GnssSnapshot const& gnssStatus, BleStatusSnapshot const& bleStatus);
 };
 
 #endif  // NORMAL_MODE_H

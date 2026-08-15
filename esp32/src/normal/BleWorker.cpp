@@ -1,5 +1,7 @@
 #include "BleWorker.h"
 
+#include <time.h>
+
 #include "common/NikonBLEClient.h"
 #include "Config.h"
 #include "GeoMessage.h"
@@ -21,6 +23,14 @@ void updateTimeMessageWithRTC(TimeMessage& message, const RtcSnapshot& dt) {
     message.dstOffset = 0;
     message.tzOffsetHours = TZ_OFFSET_HOUR;
     message.tzOffsetMinutes = 0;
+}
+
+// Read the ESP32 internal RTC (system clock, UTC).
+static RtcSnapshot readSystemRTC() {
+    time_t now = time(nullptr);
+    struct tm t{};
+    gmtime_r(&now, &t);
+    return {(uint16_t)(t.tm_year + 1900), (uint8_t)(t.tm_mon + 1), (uint8_t)t.tm_mday, (uint8_t)t.tm_hour, (uint8_t)t.tm_min, (uint8_t)t.tm_sec};
 }
 
 GeoMessage generateGeoMessage(const GnssSnapshot& snap, const RtcSnapshot& dt) {
@@ -113,7 +123,7 @@ size_t BleWorker::countActiveBLEConnections() {
 bool BleWorker::isRTCValid() {
     // hold the BLE worker's lock so it cannot read the RTC mid-write
     Lock lk(*this);
-    auto datetime = Board::getRTC();
+    auto datetime = readSystemRTC();
     return datetime.year >= 2026;
 }
 
@@ -209,7 +219,7 @@ void BleWorker::taskLoop() {
                 RtcSnapshot dt;
                 {
                     Lock lk(*this);
-                    dt = Board::getRTC();
+                    dt = readSystemRTC();
                 }
                 updateTimeMessageWithRTC(timeMessage, dt);
                 NSG_LOG_INFO("BleWorker", "Sending TIME payload to %s...", item.info.bleName.c_str());

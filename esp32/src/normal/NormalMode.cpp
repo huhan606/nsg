@@ -1,6 +1,9 @@
 #include "NormalMode.h"
 
-#include "boards/Board.h"
+#include <sys/time.h>
+
+#include <cmath>
+
 #include "Config.h"
 #include "Logging.h"
 #include "UBlox.h"
@@ -75,7 +78,7 @@ void NormalMode::loop() {
 
     GnssSnapshot gnssSnapshot{lat, lon, altitude, satellites, gnssValid};
 
-    Board::onNormalUpdateStatus(gnssSnapshot, bleWorker.getBleStatusSnapshot());
+    printStatus(gnssSnapshot, bleWorker.getBleStatusSnapshot());
 
     // if we got update from GPS
     if (nmeaGotNewCommand) {
@@ -92,7 +95,18 @@ void NormalMode::loop() {
                 // hold the BLE worker's lock so it cannot read the RTC mid-write
                 {
                     BleWorker::Lock lk(bleWorker);
-                    Board::setRTC({year, month, day, hour, minute, second});
+                    // rtc holds UTC; TZ=GMT so mktime treats tm as UTC
+                    struct tm t{};
+                    t.tm_year = year - 1900;
+                    t.tm_mon = month - 1;
+                    t.tm_mday = day;
+                    t.tm_hour = hour;
+                    t.tm_min = minute;
+                    t.tm_sec = second;
+                    t.tm_isdst = -1;
+                    struct timeval tv{};
+                    tv.tv_sec = mktime(&t);
+                    settimeofday(&tv, nullptr);
                 }
                 NSG_LOG_INFO("NormalMode::loop", "Synced time from GNSS: %04d/%02d/%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
                 nmeaLastSync = millis();
@@ -102,4 +116,29 @@ void NormalMode::loop() {
         // push current GNSS/RTC state to the BLE worker for payload building
         bleWorker.setGnssSnapshot(gnssSnapshot);
     }
+}
+
+void NormalMode::printStatus(GnssSnapshot const& gnssStatus, BleStatusSnapshot const& bleStatus) {
+    if (millis() - lastStatusPrint <= 10000) return;
+    lastStatusPrint = millis();
+    NSG_LOG_INFO("GPS Status", "FIX: %s", gnssStatus.gnssValid ? "VALID" : "INVALID");
+    // latitude
+    auto latAbs = std::fabs(gnssStatus.lat);
+    uint8_t latD = static_cast<uint8_t>(latAbs);
+    double latM = (latAbs - latD) * 60.0;
+    NSG_LOG_INFO("GPS Status", "LAT: %s %3d deg %06.3f'", gnssStatus.lat >= 0 ? "N" : "S", latD, latM);
+    // longitude
+    auto lonAbs = std::fabs(gnssStatus.lon);
+    uint8_t lonD = static_cast<uint8_t>(lonAbs);
+    double lonM = (lonAbs - lonD) * 60.0;
+    NSG_LOG_INFO("GPS Status", "LON: %s %3d deg %06.3f'", gnssStatus.lon >= 0 ? "E" : "W", lonD, lonM);
+    // altitude, some extra space to cover digits change
+    NSG_LOG_INFO("GPS Status", "ALT: %s %d M", gnssStatus.altitudeMeters >= 0 ? "+" : "-",  //
+                 gnssStatus.altitudeMeters >= 0 ? gnssStatus.altitudeMeters : -gnssStatus.altitudeMeters);
+    // satellites count
+    NSG_LOG_INFO("GPS Status", "SAT: %d", gnssStatus.satellites);
+    // BLE connection
+    NSG_LOG_INFO("GPS Status", "BLE: %u / %d", bleStatus.activeConnections, CONFIG_BTDM_CTRL_BLE_MAX_CONN);
+    // Paired devices
+    NSG_LOG_INFO("GPS Status", "CAM: %u paired", bleStatus.pairedCount);
 }

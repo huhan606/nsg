@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "common/NikonBLEScanner.h"
-#include "boards/Board.h"
 #include "ConnectedCamera.h"
 #include "Esp32RandomGenerator.h"
+#include "Snapshots.h"
 
 // Min interval between TIME/GEO broadcasts sent to a single camera.
 #ifndef NIKON_BLE_UPDATE_INTERVAL_MS
