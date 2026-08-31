@@ -52,7 +52,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var pairingSession: NikonPairingSession
 
-    private var startupReconnectTimeoutJob: kotlinx.coroutines.Job? = null
     private var keepAliveJob: kotlinx.coroutines.Job? = null
     private var geoTimeoutJob: kotlinx.coroutines.Job? = null
     private var lastActivityTime = System.currentTimeMillis()
@@ -147,11 +146,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         _savedCameras.value = settingsRepository.loadSavedCameras()
     }
 
-    override fun cancelStartupReconnectTimeout() {
-        startupReconnectTimeoutJob?.cancel()
-        startupReconnectTimeoutJob = null
-    }
-
     override fun onSessionReady() {
         startLocationUpdates()
         startKeepAlive()
@@ -174,8 +168,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     fun disconnect() {
         serviceScope.launch {
             pairingSession.disconnect()
-            startupReconnectTimeoutJob?.cancel()
-            startupReconnectTimeoutJob = null
             geoTimeoutJob?.cancel()
             updateServiceState(ConnectionState.Idle)
             keepAliveJob?.cancel()
@@ -354,35 +346,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         val cameras = settingsRepository.loadSavedCameras()
         val defaultName = settingsRepository.defaultConnectCameraName()
         val camera = defaultName?.let { name -> cameras.firstOrNull { it.name == name } }
-            ?: if (cameras.size == 1) cameras.first() else null
             ?: run {
-                if (cameras.size > 1) {
-                    logEvent(L10n.t("已保存多台相机且未设置启动默认连接，跳过自动连接", "Multiple cameras saved with no startup default; skipping auto-connect"))
-                }
+                logEvent(L10n.t("已保存多台相机且未设置启动默认连接，跳过自动连接", "No default camera set; skipping auto-connect"))
                 return
             }
         logEvent(L10n.t("服务重启，正在重连 ${camera.name}（10 秒超时）", "Service restarted; reconnecting ${camera.name} (10s timeout)"))
-        startupReconnectTimeoutJob?.cancel()
-        startupReconnectTimeoutJob = serviceScope.launch {
-            while (true) {
-                delay(1_000)
-                val current = state.value
-                if (current is ConnectionState.Ready ||
-                    current is ConnectionState.Busy ||
-                    current is ConnectionState.Error
-                ) {
-                    break
-                }
-                // Kill only when there has been no progress for 10s (the watchdog resets on
-                // every state change or reconnect-scan round), so slow scans are not cut short.
-                if (System.currentTimeMillis() - lastActivityTime > 10_000) {
-                    Log.w(TAG, "Startup reconnect timed out (state=$current), stopping")
-                    logEvent(L10n.t("10 秒内无进展，已停止自动连接", "No progress for 10s; auto-connect stopped"))
-                    disconnect()
-                    break
-                }
-            }
-        }
         connectToSavedCamera(camera)
     }
 

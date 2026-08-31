@@ -57,7 +57,6 @@ class NikonPairingSession(
         fun log(message: String)
         fun markActivity()
         fun refreshSavedCameras()
-        fun cancelStartupReconnectTimeout()
         fun onSessionReady()
     }
 
@@ -240,7 +239,7 @@ class NikonPairingSession(
                     .setServiceUuid(ParcelUuid(CameraBleManager.SERVICE_UUID))
                     .build()
                 val scanSettings = ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                     .build()
                 bleScanner.startScan(listOf(filter), scanSettings, scanCallback)
                 // Stop scan automatically after 15 seconds.
@@ -429,10 +428,18 @@ class NikonPairingSession(
         }
         reconnectScanCallback = callback
         val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build()
         try {
-            bleScanner.startScan(emptyList(), scanSettings, callback)
+            val filter = ScanFilter.Builder()
+                .setManufacturerData(
+                    0x0399,
+                    byteArrayOf(0),
+                    byteArrayOf(0)
+                )
+                .build()
+
+            bleScanner.startScan(listOf(filter), scanSettings, callback)
             scope.launch {
                 delay(30_000)
                 if (autoExtractActive && reconnectScanCallback === callback) {
@@ -610,27 +617,34 @@ class NikonPairingSession(
         }
         reconnectScanCallback = callback
         val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build()
         try {
+            val filter = ScanFilter.Builder()
+                .setManufacturerData(
+                    0x0399,
+                    byteArrayOf(0),
+                    byteArrayOf(0)
+                )
+                .build()
             // No service-UUID filter: the camera uses a fresh random BLE address between
             // sessions and may not always include the service UUID in its advertisement.
             // We match on the advertised name / Nikon manufacturer data in the callback.
-            bleScanner.startScan(emptyList(), scanSettings, callback)
+            bleScanner.startScan(listOf(filter), scanSettings, callback)
             reconnectScanTimeoutJob = scope.launch {
                 delay(20_000)
                 val activeCallback = reconnectScanCallback
                 if (activeCallback != null) {
                     try { bleScanner.stopScan(activeCallback) } catch (_: Exception) {}
                     reconnectScanCallback = null
-                    if (round == 0) {
+                    //if (round == 0) {
                         Log.w(TAG, "Reconnect scan round 1 timed out; scanning again")
                         startReconnectScan(camera, round = 1)
-                    } else {
-                        Log.w(TAG, "Reconnect scan timed out; using saved address as fallback")
-                        currentDevice = remoteDevice(camera.address)
-                        connectCurrentDevice()
-                    }
+                    //} else {
+                    //    Log.w(TAG, "Reconnect scan timed out; using saved address as fallback")
+                    //    currentDevice = remoteDevice(camera.address)
+                    //    connectCurrentDevice()
+                    //}
                 }
             }
         } catch (e: SecurityException) {
@@ -1025,7 +1039,6 @@ class NikonPairingSession(
     }
 
     private fun onBonded() {
-        host.cancelStartupReconnectTimeout()
         bondingTimeoutJob?.cancel()
         stopClassicDiscovery()
         isAwaitingBond = false

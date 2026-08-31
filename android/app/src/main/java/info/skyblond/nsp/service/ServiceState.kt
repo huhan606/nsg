@@ -11,6 +11,7 @@ sealed class ConnectionState {
     data object Bonding : ConnectionState()
     data object Ready : ConnectionState()
     data object Busy : ConnectionState()
+    data object Disconnected : ConnectionState()
     data class Error(val reason: String) : ConnectionState()
 
     val label: String
@@ -23,6 +24,7 @@ sealed class ConnectionState {
             is Bonding -> L10n.t("经典蓝牙配对中...", "Classic bonding...")
             is Ready -> L10n.t("就绪", "Ready")
             is Busy -> L10n.t("忙碌", "Busy")
+            is Disconnected -> L10n.t("...", "Disconnected")
             is Error -> L10n.t("错误: ", "Error: ") + reason
         }
 }

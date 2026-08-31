@@ -130,6 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onDisconnectClicked() {
         service?.disconnect()
+        startedService = false
     }
 
     fun onDiscoveredCameraSelected(camera: DiscoveredCamera) {
@@ -137,7 +138,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(showDiscoveredDialog = false) }
     }
 
+    private fun ensureServiceStarted() {
+        val context = getApplication<Application>()
+        ContextCompat.startForegroundService(
+            context,
+            Intent(context, CameraConnectionService::class.java)
+        )
+        startedService = true
+    }
+
     fun onSavedCameraSelected(camera: PairedCamera) {
+        ensureServiceStarted()
         service?.connectToSavedCamera(camera)
         _uiState.update { it.copy(showSavedDialog = false) }
     }
