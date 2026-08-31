@@ -151,6 +151,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         startKeepAlive()
     }
 
+    override fun onSessionDisconnected() {
+        stopKeepAlive()
+        stopLocationUpdates()
+    }
+
     // -------------------------------------------------------------------------
     // Public commands (delegated to the pairing session)
     // -------------------------------------------------------------------------
@@ -285,8 +290,24 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             logEvent(L10n.t("没有可用的定位源", "No location source available"))
             return
         }
+
         _gpsState.update { it.copy(enabled = true) }
         try {
+
+            val list =
+            listOf(
+                lastLocation,
+                if (hasNetwork) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null,
+                if (hasGps) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null)
+
+                val loc = list
+                .filterNotNull().filter {
+                    System.currentTimeMillis() - it.time < CACHED_LOCATION_TTL_MS }
+                .minByOrNull { it.accuracy }
+
+
+                loc?.let(::sendGeo)
+
             if (hasGps) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
@@ -321,7 +342,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     private fun startKeepAlive() {
-        keepAliveJob?.cancel()
+        stopKeepAlive()
         keepAliveJob = serviceScope.launch {
             while (isActive) {
                 delay(30_000)
@@ -334,6 +355,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 }
             }
         }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
     }
 
     // -------------------------------------------------------------------------
@@ -424,10 +450,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     companion object {
-        private const val GPS_UPDATE_INTERVAL_MS = 5_000L
+        private const val GPS_UPDATE_INTERVAL_MS = 30_000L
         private const val NETWORK_UPDATE_INTERVAL_MS = 15_000L
         private const val GPS_UPDATE_MIN_DISTANCE_M = 1f
         private const val MIN_SEND_DISTANCE_M = 3f
         private const val MAX_SEND_INTERVAL_MS = 20_000L
+        private const val CACHED_LOCATION_TTL_MS = 15 * 60_000L
     }
 }
