@@ -368,7 +368,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 }
                 return
             }
-        logEvent(L10n.t("服务重启，正在重连 ${camera.name}（10 秒超时）", "Service restarted; reconnecting ${camera.name}"))
+        logEvent(L10n.t("服务重启，正在重连 ${camera.name}", "Service restarted; reconnecting ${camera.name}"))
         connectToSavedCamera(camera)
     }
 
