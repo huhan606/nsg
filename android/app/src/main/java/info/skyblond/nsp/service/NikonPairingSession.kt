@@ -55,7 +55,6 @@ class NikonPairingSession(
         fun currentState(): ConnectionState
         fun updateState(state: ConnectionState)
         fun log(message: String)
-        fun markActivity()
         fun refreshSavedCameras()
         fun onSessionReady()
         fun onSessionDisconnected()
@@ -520,7 +519,7 @@ class NikonPairingSession(
     }
 
     @SuppressLint("MissingPermission")
-    private fun startReconnectScan(camera: PairedCamera, round: Int = 0) {
+    private fun startReconnectScan(camera: PairedCamera) {
         val bleScanner = scanner
         if (bleScanner == null) {
             Log.e(TAG, "BluetoothLeScanner is null, cannot start reconnect scan")
@@ -528,19 +527,14 @@ class NikonPairingSession(
             connectCurrentDevice()
             return
         }
-        host.markActivity()
         host.updateState(ConnectionState.Connecting)
-        host.log(if (round == 0) L10n.t("正在扫描已保存的相机...", "Scanning for the saved camera...") else L10n.t("未发现相机广播，继续扫描...", "Camera not found yet, continuing to scan..."))
+        host.log(L10n.t("正在扫描已保存的相机...", "Scanning for the saved camera..."))
         reconnectScanCallback?.let { try { bleScanner.stopScan(it) } catch (_: Exception) {} }
 
         lastAdvertisedDevice = null
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult?) {
                 result ?: return
-                // Any advertisement proves the scan is making progress, so keep the
-                // startup watchdog (autoReconnectLastCamera) from killing a slow scan
-                // round mid-way: it only fires after 10s with no BLE activity at all.
-                host.markActivity()
 
                 // Check name, we've already filtered for the manufacturer so if it doesn't match this is not our camera
                 val name = result.device.name
@@ -725,7 +719,7 @@ class NikonPairingSession(
                         host.log(
                             L10n.t("连接被相机拒绝，自动重新扫描以采用相机期望的设备ID（第 ${reconnectRetryCount}/2 次）", "Connection rejected by camera; rescanning to adopt the expected device ID (attempt ${reconnectRetryCount}/2)")
                         )
-                        savedCamera?.let { startReconnectScan(it, round = 0) }
+                        savedCamera?.let { startReconnectScan(it) }
                     } else {
                         host.log(L10n.t("蓝牙错误: ${event.message}", "Bluetooth error: ${event.message}"))
                         if (event.message.contains("Connection state change")) {

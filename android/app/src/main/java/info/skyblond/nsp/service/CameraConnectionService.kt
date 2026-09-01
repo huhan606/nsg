@@ -38,8 +38,8 @@ import kotlinx.coroutines.launch
 private const val TAG = "CameraConnectionService"
 
 /**
- * Foreground service shell: owns the lifecycle, the observable state, location
- * tracking and the startup watchdog. All Bluetooth pairing logic lives in
+ * Foreground service shell: owns the lifecycle, the observable state,
+ * and location tracking. All Bluetooth pairing logic lives in
  * [NikonPairingSession].
  */
 @SuppressLint("MissingPermission")
@@ -54,7 +54,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     private var keepAliveJob: kotlinx.coroutines.Job? = null
     private var geoTimeoutJob: kotlinx.coroutines.Job? = null
-    private var lastActivityTime = System.currentTimeMillis()
 
     private var locationManager: LocationManager? = null
     private var lastLocation: Location? = null
@@ -136,10 +135,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     override fun log(message: String) {
         logEvent(message)
-    }
-
-    override fun markActivity() {
-        lastActivityTime = System.currentTimeMillis()
     }
 
     override fun refreshSavedCameras() {
@@ -366,11 +361,14 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         val cameras = settingsRepository.loadSavedCameras()
         val defaultName = settingsRepository.defaultConnectCameraName()
         val camera = defaultName?.let { name -> cameras.firstOrNull { it.name == name } }
+            ?: if (cameras.size == 1) cameras.first() else null
             ?: run {
-                logEvent(L10n.t("已保存多台相机且未设置启动默认连接，跳过自动连接", "No default camera set; skipping auto-connect"))
+                if (cameras.size > 1) {
+                    logEvent(L10n.t("已保存多台相机且未设置启动默认连接，跳过自动连接", "Multiple cameras saved with no startup default; skipping auto-connect"))
+                }
                 return
             }
-        logEvent(L10n.t("服务重启，正在重连 ${camera.name}（10 秒超时）", "Service restarted; reconnecting ${camera.name} (10s timeout)"))
+        logEvent(L10n.t("服务重启，正在重连 ${camera.name}（10 秒超时）", "Service restarted; reconnecting ${camera.name}"))
         connectToSavedCamera(camera)
     }
 
@@ -430,7 +428,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     private fun updateServiceState(newState: ConnectionState) {
         _state.value = newState
-        lastActivityTime = System.currentTimeMillis()
         NotificationHelper.update(this, newState.label)
     }
 

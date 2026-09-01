@@ -92,6 +92,7 @@ fun SavedCameraDialog(
                 Text(L10n.t("暂无已保存的相机，请先配对", "No saved cameras yet. Pair one first."))
             } else {
                 LazyColumn {
+                    if (cameras.size > 1) {
                     item {
                         Text(
                             text = L10n.t(
@@ -100,6 +101,7 @@ fun SavedCameraDialog(
                             ),
                             style = MaterialTheme.typography.bodySmall
                         )
+                    }
                     }
                     items(cameras, key = { it.address }) { camera ->
                         Card(
@@ -134,8 +136,13 @@ fun SavedCameraDialog(
                                     TextButton(onClick = { onSelect(camera) }) {
                                         Text(L10n.t("连接", "Connect"))
                                     }
+                                    TextButton(onClick = { onAutoExtract(camera) }) {
+                                        Text(L10n.t("自动提取标识", "Auto Extract ID"))
+                                    }
+                                    if (cameras.size > 1) {
                                     TextButton(onClick = { onSetDefault(camera) }) {
                                         Text(if (isDefault) L10n.t("取消默认", "Unset Default") else L10n.t("设为默认", "Set Default"))
+                                    }
                                     }
                                     TextButton(onClick = { pendingDelete = camera }) {
                                         Text(L10n.t("删除", "Delete"))
