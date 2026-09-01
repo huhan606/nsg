@@ -38,8 +38,8 @@ import kotlinx.coroutines.launch
 private const val TAG = "CameraConnectionService"
 
 /**
- * Foreground service shell: owns the lifecycle, the observable state, location
- * tracking and the startup watchdog. All Bluetooth pairing logic lives in
+ * Foreground service shell: owns the lifecycle, the observable state,
+ * and location tracking. All Bluetooth pairing logic lives in
  * [NikonPairingSession].
  */
 @SuppressLint("MissingPermission")
@@ -52,10 +52,8 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var pairingSession: NikonPairingSession
 
-    private var startupReconnectTimeoutJob: kotlinx.coroutines.Job? = null
     private var keepAliveJob: kotlinx.coroutines.Job? = null
     private var geoTimeoutJob: kotlinx.coroutines.Job? = null
-    private var lastActivityTime = System.currentTimeMillis()
 
     private var locationManager: LocationManager? = null
     private var lastLocation: Location? = null
@@ -139,22 +137,18 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         logEvent(message)
     }
 
-    override fun markActivity() {
-        lastActivityTime = System.currentTimeMillis()
-    }
-
     override fun refreshSavedCameras() {
         _savedCameras.value = settingsRepository.loadSavedCameras()
-    }
-
-    override fun cancelStartupReconnectTimeout() {
-        startupReconnectTimeoutJob?.cancel()
-        startupReconnectTimeoutJob = null
     }
 
     override fun onSessionReady() {
         startLocationUpdates()
         startKeepAlive()
+    }
+
+    override fun onSessionDisconnected() {
+        stopKeepAlive()
+        stopLocationUpdates()
     }
 
     // -------------------------------------------------------------------------
@@ -174,8 +168,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     fun disconnect() {
         serviceScope.launch {
             pairingSession.disconnect()
-            startupReconnectTimeoutJob?.cancel()
-            startupReconnectTimeoutJob = null
             geoTimeoutJob?.cancel()
             updateServiceState(ConnectionState.Idle)
             keepAliveJob?.cancel()
@@ -293,8 +285,18 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             logEvent(L10n.t("没有可用的定位源", "No location source available"))
             return
         }
+
         _gpsState.update { it.copy(enabled = true) }
         try {
+            lastLocation = listOf(
+                lastLocation,
+                if (hasNetwork) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null,
+                if (hasGps) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null)
+                .filterNotNull().filter {
+                    System.currentTimeMillis() - it.time < CACHED_LOCATION_TTL_MS }
+                .minByOrNull { it.accuracy }
+            lastLocation?.let(::sendGeo)
+
             if (hasGps) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
@@ -329,7 +331,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     private fun startKeepAlive() {
-        keepAliveJob?.cancel()
+        stopKeepAlive()
         keepAliveJob = serviceScope.launch {
             while (isActive) {
                 delay(30_000)
@@ -342,6 +344,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 }
             }
         }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
     }
 
     // -------------------------------------------------------------------------
@@ -361,28 +368,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 }
                 return
             }
-        logEvent(L10n.t("服务重启，正在重连 ${camera.name}（10 秒超时）", "Service restarted; reconnecting ${camera.name} (10s timeout)"))
-        startupReconnectTimeoutJob?.cancel()
-        startupReconnectTimeoutJob = serviceScope.launch {
-            while (true) {
-                delay(1_000)
-                val current = state.value
-                if (current is ConnectionState.Ready ||
-                    current is ConnectionState.Busy ||
-                    current is ConnectionState.Error
-                ) {
-                    break
-                }
-                // Kill only when there has been no progress for 10s (the watchdog resets on
-                // every state change or reconnect-scan round), so slow scans are not cut short.
-                if (System.currentTimeMillis() - lastActivityTime > 10_000) {
-                    Log.w(TAG, "Startup reconnect timed out (state=$current), stopping")
-                    logEvent(L10n.t("10 秒内无进展，已停止自动连接", "No progress for 10s; auto-connect stopped"))
-                    disconnect()
-                    break
-                }
-            }
-        }
+        logEvent(L10n.t("服务重启，正在重连 ${camera.name}", "Service restarted; reconnecting ${camera.name}"))
         connectToSavedCamera(camera)
     }
 
@@ -442,7 +428,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     private fun updateServiceState(newState: ConnectionState) {
         _state.value = newState
-        lastActivityTime = System.currentTimeMillis()
         NotificationHelper.update(this, newState.label)
     }
 
@@ -461,5 +446,6 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         private const val GPS_UPDATE_MIN_DISTANCE_M = 1f
         private const val MIN_SEND_DISTANCE_M = 3f
         private const val MAX_SEND_INTERVAL_MS = 20_000L
+        private const val CACHED_LOCATION_TTL_MS = 15 * 60_000L
     }
 }

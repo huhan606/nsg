@@ -55,10 +55,9 @@ class NikonPairingSession(
         fun currentState(): ConnectionState
         fun updateState(state: ConnectionState)
         fun log(message: String)
-        fun markActivity()
         fun refreshSavedCameras()
-        fun cancelStartupReconnectTimeout()
         fun onSessionReady()
+        fun onSessionDisconnected()
     }
 
     private val pairingEngine = NikonPairingEngine()
@@ -86,7 +85,6 @@ class NikonPairingSession(
     private var classicBondComplete: Boolean = false
     private var reBondAfterRemoval: Boolean = false
     private var reconnectScanCallback: ScanCallback? = null
-    private var reconnectScanTimeoutJob: kotlinx.coroutines.Job? = null
     private var adoptedDeviceId: Long? = null
     private var lastAdvertisedDevice: Long? = null
     private var stage1RetryCount = 0
@@ -340,8 +338,8 @@ class NikonPairingSession(
                 settings.spoofControllerName() ?: BleHelpers.DEFAULT_CONTROLLER_NAME
             }
             // The camera changes its BLE (random) address between sessions. Scan for the
-            // current advertisement by name before connecting; if the scan fails or times
-            // out, fall back to the saved address.
+            // current advertisement by name before connecting; if the scan fails, fall
+            // back to the saved address.
             startReconnectScan(camera)
         }
     }
@@ -521,7 +519,7 @@ class NikonPairingSession(
     }
 
     @SuppressLint("MissingPermission")
-    private fun startReconnectScan(camera: PairedCamera, round: Int = 0) {
+    private fun startReconnectScan(camera: PairedCamera) {
         val bleScanner = scanner
         if (bleScanner == null) {
             Log.e(TAG, "BluetoothLeScanner is null, cannot start reconnect scan")
@@ -529,32 +527,29 @@ class NikonPairingSession(
             connectCurrentDevice()
             return
         }
-        host.markActivity()
         host.updateState(ConnectionState.Connecting)
-        host.log(if (round == 0) L10n.t("正在扫描已保存的相机...", "Scanning for the saved camera...") else L10n.t("未发现相机广播，继续扫描...", "Camera not found yet, continuing to scan..."))
-        reconnectScanTimeoutJob?.cancel()
+        host.log(L10n.t("正在扫描已保存的相机...", "Scanning for the saved camera..."))
         reconnectScanCallback?.let { try { bleScanner.stopScan(it) } catch (_: Exception) {} }
 
         lastAdvertisedDevice = null
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult?) {
                 result ?: return
-                // Any advertisement proves the scan is making progress, so keep the
-                // startup watchdog (autoReconnectLastCamera) from killing a slow scan
-                // round mid-way: it only fires after 10s with no BLE activity at all.
-                host.markActivity()
+
+                // Check name, we've already filtered for the manufacturer so if it doesn't match this is not our camera
                 val name = result.device.name
-                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
-                val nameMatch = name != null && name == camera.name
-                if (advertised == null && !nameMatch) {
+                if (name != camera.name) {
                     Log.d(TAG, "Reconnect scan (other): ${result.device.address} name=$name rssi=${result.rssi}")
                     return
                 }
+
                 Log.d(
                     TAG,
                     "Reconnect scan candidate: ${result.device.address} name=$name rssi=${result.rssi} " +
                         "manufacturer=[${BleHelpers.formatManufacturerData(result.scanRecord)}]"
                 )
+
+                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
                 if (advertised != null) {
                     // The camera advertises the device ID it expects when a pairing record
                     // exists. Adopting it makes the camera treat this app as that device,
@@ -583,9 +578,9 @@ class NikonPairingSession(
                         savedCamera = adopted
                     }
                 }
+
                 reconnectRetryCount = 0
                 Log.d(TAG, "Reconnect scan found current BLE address: ${result.device.address} (saved was ${camera.address})")
-                reconnectScanTimeoutJob?.cancel()
                 reconnectScanCallback?.let { try { bleScanner.stopScan(it) } catch (_: Exception) {} }
                 reconnectScanCallback = null
                 // Update the persisted address so next time we can try directly first.
@@ -610,29 +605,21 @@ class NikonPairingSession(
         }
         reconnectScanCallback = callback
         val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build()
         try {
             // No service-UUID filter: the camera uses a fresh random BLE address between
             // sessions and may not always include the service UUID in its advertisement.
-            // We match on the advertised name / Nikon manufacturer data in the callback.
-            bleScanner.startScan(emptyList(), scanSettings, callback)
-            reconnectScanTimeoutJob = scope.launch {
-                delay(20_000)
-                val activeCallback = reconnectScanCallback
-                if (activeCallback != null) {
-                    try { bleScanner.stopScan(activeCallback) } catch (_: Exception) {}
-                    reconnectScanCallback = null
-                    if (round == 0) {
-                        Log.w(TAG, "Reconnect scan round 1 timed out; scanning again")
-                        startReconnectScan(camera, round = 1)
-                    } else {
-                        Log.w(TAG, "Reconnect scan timed out; using saved address as fallback")
-                        currentDevice = remoteDevice(camera.address)
-                        connectCurrentDevice()
-                    }
-                }
-            }
+            // We filter on anything Nikon so we're allowed to scan while the screen is off.
+            // We then match the advertised name in the callback to find this camera.
+            val filter = ScanFilter.Builder()
+                .setManufacturerData(
+                    0x0399,
+                    byteArrayOf(0),
+                    byteArrayOf(0)
+                )
+                .build()
+            bleScanner.startScan(listOf(filter), scanSettings, callback)
         } catch (e: SecurityException) {
             host.updateState(ConnectionState.Error("Missing permission: ${e.message}"))
         } catch (e: Exception) {
@@ -652,7 +639,6 @@ class NikonPairingSession(
         }
         idWriteTimeoutJob?.cancel()
         bondingTimeoutJob?.cancel()
-        reconnectScanTimeoutJob?.cancel()
         reconnectScanCallback?.let { try { scanner?.stopScan(it) } catch (_: Exception) {} }
         reconnectScanCallback = null
         stopClassicDiscovery()
@@ -714,6 +700,7 @@ class NikonPairingSession(
                     } else {
                         host.updateState(ConnectionState.Error(L10n.t("相机已断开", "Camera disconnected")))
                     }
+                    host.onSessionDisconnected()
                 }
                 is BleEvent.Error -> {
                     Log.e(TAG, "onEvent: Error ${event.message}")
@@ -732,7 +719,7 @@ class NikonPairingSession(
                         host.log(
                             L10n.t("连接被相机拒绝，自动重新扫描以采用相机期望的设备ID（第 ${reconnectRetryCount}/2 次）", "Connection rejected by camera; rescanning to adopt the expected device ID (attempt ${reconnectRetryCount}/2)")
                         )
-                        savedCamera?.let { startReconnectScan(it, round = 0) }
+                        savedCamera?.let { startReconnectScan(it) }
                     } else {
                         host.log(L10n.t("蓝牙错误: ${event.message}", "Bluetooth error: ${event.message}"))
                         if (event.message.contains("Connection state change")) {
@@ -753,7 +740,6 @@ class NikonPairingSession(
         isAwaitingBond = false
         classicBondComplete = false
         classicDevice = null
-        reconnectScanTimeoutJob?.cancel()
         reconnectScanCallback?.let { try { scanner?.stopScan(it) } catch (_: Exception) {} }
         reconnectScanCallback = null
         stage1RetryCount = 0
@@ -1025,7 +1011,6 @@ class NikonPairingSession(
     }
 
     private fun onBonded() {
-        host.cancelStartupReconnectTimeout()
         bondingTimeoutJob?.cancel()
         stopClassicDiscovery()
         isAwaitingBond = false

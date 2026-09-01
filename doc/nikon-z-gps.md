@@ -427,7 +427,7 @@ Populate the fields, then write the 41-byte buffer to the `GEO` characteristic w
 
 ## 8. Reconnecting a Saved Camera
 
-When a camera has been paired once, you do not need to repeat the handshake every time.  Persist:
+Once a camera has been paired, the controller identity and Bluetooth Classic bond can be reused. Reconnects still perform the BLE handshake using the persisted device and nonce.
 
 ```c
 struct nikon_persisted_t {
@@ -439,15 +439,13 @@ struct nikon_persisted_t {
 };
 ```
 
-On reconnect:
+For reconnect discovery, do not rely on the service UUID or saved BLE address. Some reconnect advertisements may omit the service UUID, and the manufacturer-data device field identifies the controller identity currently expected by the camera rather than the camera itself. A reconnect implementation can filter on Nikon manufacturer ID 0x0399, identify the target camera by its advertised name, and connect using the current advertisement address.
 
-1. The camera may be advertising with a new BLE address, so start scanning for the primary service UUID (or for the camera name).
-2. Prefer advertisements that include manufacturer data with:
-   * `companyID == 0x0399` (little-endian)
-   * `device == persisted.device` (little-endian)
-   * trailing byte `0x00`
-3. Connect to the address in the current advertisement.
-4. If the camera is already OS-paired, the saved `device`/`nonce` can be reused for the handshake with a new random timestamp; otherwise run the full pairing/bonding flow again.
+The camera may advertise with a new BLE address between sessions, so the saved address cannot reliably be used as a discovery filter.
+
+On Android, the scan must use an OS-level filter if it is expected to continue while the screen is off. Filtering on Nikon manufacturer ID 0x0399 satisfies that requirement while leaving the target-camera match to application code. 
+
+An OS-level filter on the camera name would be more selective, but in testing it did not return scan results reliably, so the implementation uses the Nikon manufacturer filter and performs the name match in application code.
 
 ---
 

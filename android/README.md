@@ -38,7 +38,7 @@ The app auto-generates a controller name in SnapBridge's exact format (`Android_
 
 - Multiple cameras supported; per-camera actions: Connect, Auto-Extract ID, Set Default, Delete;
 - With multiple cameras, pick the "default at startup" one;
-- Startup auto-connect has a 10-second timeout.
+- Startup auto-connect keeps waiting for the selected/default camera while the service is running.
 
 ### 6. UI and localization
 
