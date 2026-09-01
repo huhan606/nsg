@@ -541,10 +541,10 @@ class NikonPairingSession(
                 // startup watchdog (autoReconnectLastCamera) from killing a slow scan
                 // round mid-way: it only fires after 10s with no BLE activity at all.
                 host.markActivity()
+
+                // Check name, we've already filtered for the manufacturer so if it doesn't match this is not our camera
                 val name = result.device.name
-                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
-                val nameMatch = name != null && name == camera.name
-                if (advertised == null && !nameMatch) {
+                if (name != camera.name) {
                     Log.d(TAG, "Reconnect scan (other): ${result.device.address} name=$name rssi=${result.rssi}")
                     return
                 }
@@ -554,6 +554,8 @@ class NikonPairingSession(
                     "Reconnect scan candidate: ${result.device.address} name=$name rssi=${result.rssi} " +
                         "manufacturer=[${BleHelpers.formatManufacturerData(result.scanRecord)}]"
                 )
+
+                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
                 if (advertised != null) {
                     // The camera advertises the device ID it expects when a pairing record
                     // exists. Adopting it makes the camera treat this app as that device,
@@ -582,6 +584,7 @@ class NikonPairingSession(
                         savedCamera = adopted
                     }
                 }
+
                 reconnectRetryCount = 0
                 Log.d(TAG, "Reconnect scan found current BLE address: ${result.device.address} (saved was ${camera.address})")
                 reconnectScanCallback?.let { try { bleScanner.stopScan(it) } catch (_: Exception) {} }
