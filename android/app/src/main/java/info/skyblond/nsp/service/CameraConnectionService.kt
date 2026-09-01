@@ -288,14 +288,14 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
         _gpsState.update { it.copy(enabled = true) }
         try {
-            listOf(
+            lastLocation = listOf(
                 lastLocation,
                 if (hasNetwork) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null,
                 if (hasGps) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null)
                 .filterNotNull().filter {
                     System.currentTimeMillis() - it.time < CACHED_LOCATION_TTL_MS }
                 .minByOrNull { it.accuracy }
-                ?.let(::sendGeo)
+            lastLocation?.let(::sendGeo)
 
             if (hasGps) {
                 lm.requestLocationUpdates(

@@ -93,15 +93,15 @@ fun SavedCameraDialog(
             } else {
                 LazyColumn {
                     if (cameras.size > 1) {
-                    item {
-                        Text(
-                            text = L10n.t(
-                                "已保存 ${cameras.size} 台相机。可点「设为默认」选择启动时自动连接的相机，点「删除」移除。",
-                                "${cameras.size} camera(s) saved. Use \"Set Default\" to pick the auto-connect camera at startup; \"Delete\" removes it."
-                            ),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+                        item {
+                            Text(
+                                text = L10n.t(
+                                    "已保存 ${cameras.size} 台相机。可点「设为默认」选择启动时自动连接的相机，点「删除」移除。",
+                                    "${cameras.size} camera(s) saved. Use \"Set Default\" to pick the auto-connect camera at startup; \"Delete\" removes it."
+                                ),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                     items(cameras, key = { it.address }) { camera ->
                         Card(
@@ -140,9 +140,9 @@ fun SavedCameraDialog(
                                         Text(L10n.t("自动提取标识", "Auto Extract ID"))
                                     }
                                     if (cameras.size > 1) {
-                                    TextButton(onClick = { onSetDefault(camera) }) {
-                                        Text(if (isDefault) L10n.t("取消默认", "Unset Default") else L10n.t("设为默认", "Set Default"))
-                                    }
+                                        TextButton(onClick = { onSetDefault(camera) }) {
+                                            Text(if (isDefault) L10n.t("取消默认", "Unset Default") else L10n.t("设为默认", "Set Default"))
+                                        }
                                     }
                                     TextButton(onClick = { pendingDelete = camera }) {
                                         Text(L10n.t("删除", "Delete"))

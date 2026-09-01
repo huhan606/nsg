@@ -338,8 +338,8 @@ class NikonPairingSession(
                 settings.spoofControllerName() ?: BleHelpers.DEFAULT_CONTROLLER_NAME
             }
             // The camera changes its BLE (random) address between sessions. Scan for the
-            // current advertisement by name before connecting; if the scan fails or times
-            // out, fall back to the saved address.
+            // current advertisement by name before connecting; if the scan fails, fall
+            // back to the saved address.
             startReconnectScan(camera)
         }
     }

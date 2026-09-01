@@ -11,7 +11,7 @@ sealed class ConnectionState {
     data object Bonding : ConnectionState()
     data object Ready : ConnectionState()
     data object Busy : ConnectionState()
-     data class Error(val reason: String) : ConnectionState()
+    data class Error(val reason: String) : ConnectionState()
 
     val label: String
         get() = when (this) {
