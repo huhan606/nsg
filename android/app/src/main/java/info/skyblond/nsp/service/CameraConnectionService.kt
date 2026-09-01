@@ -293,20 +293,14 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
         _gpsState.update { it.copy(enabled = true) }
         try {
-
-            val list =
             listOf(
                 lastLocation,
                 if (hasNetwork) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null,
                 if (hasGps) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null)
-
-                val loc = list
                 .filterNotNull().filter {
                     System.currentTimeMillis() - it.time < CACHED_LOCATION_TTL_MS }
                 .minByOrNull { it.accuracy }
-
-
-                loc?.let(::sendGeo)
+                ?.let(::sendGeo)
 
             if (hasGps) {
                 lm.requestLocationUpdates(
@@ -450,7 +444,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     companion object {
-        private const val GPS_UPDATE_INTERVAL_MS = 30_000L
+        private const val GPS_UPDATE_INTERVAL_MS = 5_000L
         private const val NETWORK_UPDATE_INTERVAL_MS = 15_000L
         private const val GPS_UPDATE_MIN_DISTANCE_M = 1f
         private const val MIN_SEND_DISTANCE_M = 3f

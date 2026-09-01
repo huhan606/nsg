@@ -541,9 +541,8 @@ class NikonPairingSession(
                 // startup watchdog (autoReconnectLastCamera) from killing a slow scan
                 // round mid-way: it only fires after 10s with no BLE activity at all.
                 host.markActivity()
-
-                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
                 val name = result.device.name
+                val advertised = BleHelpers.extractAdvertisedDeviceId(result.scanRecord)
                 val nameMatch = name != null && name == camera.name
                 if (advertised == null && !nameMatch) {
                     Log.d(TAG, "Reconnect scan (other): ${result.device.address} name=$name rssi=${result.rssi}")
@@ -826,7 +825,7 @@ class NikonPairingSession(
                 pairingStep = 3
                 idWriteTimeoutJob?.cancel()
                 idWriteTimeoutJob = scope.launch {
-                    delay(30)
+                    delay(3_000)
                     if (pairingStep != 3) return@launch
                     Log.d(TAG, "No NOT1 success after stage 4, writing controller ID anyway")
                     writeControllerId()
