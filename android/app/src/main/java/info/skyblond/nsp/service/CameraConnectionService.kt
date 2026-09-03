@@ -274,6 +274,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 lastFixTime = System.currentTimeMillis()
             )
         }
+        if (::settingsRepository.isInitialized && settingsRepository.isTrackLoggingEnabled()) {
+            GpxTrackLogger.addPoint(location)
+        }
         maybeSendGeo(location)
     }
 

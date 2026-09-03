@@ -43,6 +43,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +64,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,8 +85,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import info.skyblond.nsp.data.PairedCamera
 import info.skyblond.nsp.data.SettingsRepository
 import info.skyblond.nsp.service.ConnectionState
+import info.skyblond.nsp.service.GpxTrackLogger
 import info.skyblond.nsp.ui.BluetoothEnableGate
 import info.skyblond.nsp.ui.DiscoveredCameraDialog
 import info.skyblond.nsp.ui.L10n
@@ -140,9 +149,30 @@ private fun MainScreen(viewModel: MainViewModel) {
     var spoofName by remember { mutableStateOf(settingsRepo.spoofControllerName() ?: "") }
     var fixedDeviceId by remember { mutableStateOf(settingsRepo.fixedDeviceIdRaw() ?: "") }
     var gpsIntervalSeconds by remember { mutableIntStateOf(settingsRepo.gpsIntervalSeconds()) }
+    var isHapticEnabled by remember { mutableStateOf(settingsRepo.isHapticFeedbackEnabled()) }
+    var isTrackLoggingEnabled by remember { mutableStateOf(settingsRepo.isTrackLoggingEnabled()) }
     var showAdvancedSettingsPage by remember { mutableStateOf(false) }
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     val batteryExempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+
+    val onHapticEnabledChange: (Boolean) -> Unit = { enabled ->
+        isHapticEnabled = enabled
+        settingsRepo.setHapticFeedbackEnabled(enabled)
+    }
+
+    val onTrackLoggingEnabledChange: (Boolean) -> Unit = { enabled ->
+        isTrackLoggingEnabled = enabled
+        settingsRepo.setTrackLoggingEnabled(enabled)
+    }
+
+    val onExportGpx = {
+        val file = GpxTrackLogger.exportGpx(context)
+        if (file != null) {
+            GpxTrackLogger.shareGpx(context, file)
+        } else {
+            Toast.makeText(context, L10n.t("暂无航迹点可导出", "No track points to export"), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val onBatteryClick = {
         val intent = Intent(
@@ -221,6 +251,11 @@ private fun MainScreen(viewModel: MainViewModel) {
             onFixedDeviceIdChange = onFixedDeviceIdChange,
             gpsIntervalSeconds = gpsIntervalSeconds,
             onGpsIntervalChange = onGpsIntervalChange,
+            isHapticEnabled = isHapticEnabled,
+            onHapticEnabledChange = onHapticEnabledChange,
+            isTrackLoggingEnabled = isTrackLoggingEnabled,
+            onTrackLoggingEnabledChange = onTrackLoggingEnabledChange,
+            onExportGpx = onExportGpx,
             onBack = { showAdvancedSettingsPage = false }
         )
         return
@@ -268,6 +303,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                             )
                             StatusTelemetryCard(
                                 uiState = uiState,
+                                onSwitchCamera = { viewModel.onSavedCameraSelected(it) },
                                 onCopyCoords = { coords ->
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("GPS", coords))
@@ -315,6 +351,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                     )
                     StatusTelemetryCard(
                         uiState = uiState,
+                        onSwitchCamera = { viewModel.onSavedCameraSelected(it) },
                         onCopyCoords = { coords ->
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("GPS", coords))
@@ -432,6 +469,77 @@ private fun HeaderBar(
 }
 
 @Composable
+private fun BreathingStatusIndicator(
+    connectionState: ConnectionState,
+    color: Color,
+    modifier: Modifier = Modifier,
+    dotSize: androidx.compose.ui.unit.Dp = 8.dp
+) {
+    val isPulsing = connectionState is ConnectionState.Ready ||
+        connectionState is ConnectionState.Busy ||
+        connectionState is ConnectionState.Scanning ||
+        connectionState is ConnectionState.Connecting ||
+        connectionState is ConnectionState.Pairing
+
+    if (isPulsing) {
+        val infiniteTransition = rememberInfiniteTransition(label = "breathingPulse")
+        val pulseDuration = when (connectionState) {
+            is ConnectionState.Busy -> 700
+            is ConnectionState.Scanning -> 1100
+            else -> 1800
+        }
+        val scale by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = if (connectionState is ConnectionState.Busy) 2.2f else 1.9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(pulseDuration, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "pulseScale"
+        )
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.65f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(pulseDuration, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "pulseAlpha"
+        )
+
+        Box(
+            modifier = modifier.size(dotSize * 2.2f),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(dotSize * scale)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = alpha))
+            )
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    } else {
+        Box(
+            modifier = modifier.size(dotSize * 2.2f),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
+@Composable
 private fun StatusIndicatorChip(connectionState: ConnectionState) {
     val (statusColor, statusText) = when (connectionState) {
         is ConnectionState.Ready -> StatusReady to L10n.t("就绪", "Ready")
@@ -456,11 +564,10 @@ private fun StatusIndicatorChip(connectionState: ConnectionState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(statusColor)
+            BreathingStatusIndicator(
+                connectionState = connectionState,
+                color = statusColor,
+                dotSize = 6.dp
             )
             Text(
                 text = statusText,
@@ -478,9 +585,19 @@ private fun StatusIndicatorChip(connectionState: ConnectionState) {
 @Composable
 private fun StatusTelemetryCard(
     uiState: MainViewModel.UiState,
+    onSwitchCamera: (PairedCamera) -> Unit,
     onCopyCoords: (String) -> Unit
 ) {
     val gps = uiState.gpsState
+    val statusColor = when (uiState.connectionState) {
+        is ConnectionState.Ready -> StatusReady
+        is ConnectionState.Busy -> StatusBusy
+        is ConnectionState.Scanning, is ConnectionState.Connecting,
+        is ConnectionState.Discovering, is ConnectionState.Pairing,
+        is ConnectionState.Bonding -> StatusScanning
+        is ConnectionState.Error -> StatusError
+        is ConnectionState.Idle -> StatusIdle
+    }
 
     ElevatedCard(
         shape = RoundedCornerShape(16.dp),
@@ -504,11 +621,21 @@ private fun StatusTelemetryCard(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = uiState.connectionState.label,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        BreathingStatusIndicator(
+                            connectionState = uiState.connectionState,
+                            color = statusColor,
+                            dotSize = 8.dp
+                        )
+                        Text(
+                            text = uiState.connectionState.label,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 Surface(
@@ -521,6 +648,85 @@ private fun StatusTelemetryCard(
                         color = if (uiState.serviceBound) StatusReady else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+            }
+
+            // Multi-Camera Quick Switch Row (if paired cameras exist)
+            if (uiState.savedCameras.isNotEmpty()) {
+                var cameraMenuOpen by remember { mutableStateOf(false) }
+                val activeCameraName = uiState.defaultCameraName ?: uiState.savedCameras.firstOrNull()?.name ?: ""
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = L10n.t("目标相机", "Target Camera"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Box {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NikonYellow.copy(alpha = 0.35f)),
+                            modifier = Modifier.clickable(enabled = uiState.savedCameras.size > 1) {
+                                cameraMenuOpen = true
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "📷 $activeCameraName",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (uiState.savedCameras.size > 1) {
+                                    Text(
+                                        text = "▼",
+                                        fontSize = 8.sp,
+                                        color = NikonYellow
+                                    )
+                                }
+                            }
+                        }
+
+                        if (uiState.savedCameras.size > 1) {
+                            DropdownMenu(
+                                expanded = cameraMenuOpen,
+                                onDismissRequest = { cameraMenuOpen = false }
+                            ) {
+                                uiState.savedCameras.forEach { cam ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(cam.name)
+                                                if (cam.name == uiState.defaultCameraName) {
+                                                    Text(
+                                                        text = L10n.t("[默认]", "[Default]"),
+                                                        color = NikonYellow,
+                                                        style = MaterialTheme.typography.labelSmall
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            cameraMenuOpen = false
+                                            onSwitchCamera(cam)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -563,6 +769,56 @@ private fun StatusTelemetryCard(
                     val lonDir = if (lon >= 0) "E" else "W"
                     val coordsStr = String.format(Locale.US, "%.5f°%s, %.5f°%s", lat.absoluteValue, latDir, lon.absoluteValue, lonDir)
 
+                    // Accuracy Level & Satellite Pill Banner
+                    val accMeters = gps.accuracyMeters
+                    val (accColor, accLabel) = when {
+                        accMeters == null -> MaterialTheme.colorScheme.onSurfaceVariant to L10n.t("定位中", "Fixing")
+                        accMeters <= 8f -> StatusReady to L10n.t("高精度", "High Precision")
+                        accMeters <= 20f -> StatusBusy to L10n.t("良好", "Good")
+                        else -> StatusError to L10n.t("粗略", "Coarse")
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = accColor.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, accColor.copy(alpha = 0.35f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(accColor)
+                                )
+                                Text(
+                                    text = "$accLabel (±${accMeters?.toInt() ?: 0}m)",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = accColor
+                                )
+                            }
+                        }
+
+                        val satText = if (gps.satellites != null) {
+                            "${gps.satellites} ${L10n.t("颗卫星", "sats")}" + (gps.totalSatellites?.let { "/$it" } ?: "")
+                        } else {
+                            L10n.t("GNSS 已锁定", "GNSS Locked")
+                        }
+                        Text(
+                            text = "🛰️ $satText",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     // Coordinate display with copy button
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -598,12 +854,12 @@ private fun StatusTelemetryCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MetricPill(
-                            label = L10n.t("精度", "Accuracy"),
-                            value = "±${gps.accuracyMeters?.toInt() ?: 0}m"
+                            label = L10n.t("海拔", "Altitude"),
+                            value = if (gps.altitude != null) "${if (gps.altitude >= 0) "+" else ""}${gps.altitude.toInt()}m" else "-- m"
                         )
                         MetricPill(
                             label = L10n.t("卫星", "Satellites"),
-                            value = "GPS/BDS"
+                            value = if (gps.satellites != null) "${gps.satellites}颗" else "4+颗"
                         )
                         gps.lastSentTime?.let {
                             MetricPill(
@@ -900,6 +1156,11 @@ private fun AdvancedSettingsPage(
     onFixedDeviceIdChange: (String) -> Unit,
     gpsIntervalSeconds: Int,
     onGpsIntervalChange: (Int) -> Unit,
+    isHapticEnabled: Boolean,
+    onHapticEnabledChange: (Boolean) -> Unit,
+    isTrackLoggingEnabled: Boolean,
+    onTrackLoggingEnabledChange: (Boolean) -> Unit,
+    onExportGpx: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -955,9 +1216,18 @@ private fun AdvancedSettingsPage(
                     onIntervalChange = onGpsIntervalChange
                 )
 
+                // Section 2: Photography Assist & Haptic Feedback
+                PhotographyToolsSection(
+                    isHapticEnabled = isHapticEnabled,
+                    onHapticEnabledChange = onHapticEnabledChange,
+                    isTrackLoggingEnabled = isTrackLoggingEnabled,
+                    onTrackLoggingEnabledChange = onTrackLoggingEnabledChange,
+                    onExportGpx = onExportGpx
+                )
+
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-                // Section 2: SnapBridge Compatibility & Identity
+                // Section 3: SnapBridge Compatibility & Identity
                 Text(
                     text = L10n.t("相机标识与 SnapBridge 兼容", "Camera Identity & SnapBridge"),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -985,6 +1255,102 @@ private fun AdvancedSettingsPage(
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhotographyToolsSection(
+    isHapticEnabled: Boolean,
+    onHapticEnabledChange: (Boolean) -> Unit,
+    isTrackLoggingEnabled: Boolean,
+    onTrackLoggingEnabledChange: (Boolean) -> Unit,
+    onExportGpx: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Column {
+                Text(
+                    text = L10n.t("实战摄影与触感辅助", "Shooting Assist & Haptics"),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = L10n.t("专为户外口袋盲操与旅行记录设计的专属体验", "Designed for pocket blind-shooting and travel records"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Haptic switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = L10n.t("触感震动反馈", "Haptic Vibration Feedback"),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = L10n.t("相机连接就绪、定位发送成功及异常断开时触发物理触觉反馈", "Vibrate when camera connects, GPS sends, or disconnects"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isHapticEnabled,
+                    onCheckedChange = onHapticEnabledChange
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+            // Track logging switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = L10n.t("记录拍摄足迹 (GPX)", "Record Photo Track (GPX)"),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = L10n.t("同步定位时记录航迹，方便导入 Lightroom / 摄影地图回放", "Record GPS track for Lightroom / photography map"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isTrackLoggingEnabled,
+                    onCheckedChange = onTrackLoggingEnabledChange
+                )
+            }
+
+            // Export GPX button
+            val pointCount = remember { GpxTrackLogger.pointCount() }
+            OutlinedButton(
+                onClick = onExportGpx,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = L10n.t("导出 GPX 航迹文件", "Export GPX Track") + " ($pointCount " + L10n.t("个航迹点", "pts") + ")"
+                )
             }
         }
     }
