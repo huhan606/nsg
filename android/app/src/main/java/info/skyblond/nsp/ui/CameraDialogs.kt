@@ -131,7 +131,7 @@ fun SavedCameraDialog(
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center
+                                    horizontalArrangement = Arrangement.SpaceEvenly
                                 ) {
                                     TextButton(onClick = { onSelect(camera) }) {
                                         Text(L10n.t("连接", "Connect"))
@@ -139,13 +139,18 @@ fun SavedCameraDialog(
                                     TextButton(onClick = { onAutoExtract(camera) }) {
                                         Text(L10n.t("自动提取标识", "Auto Extract ID"))
                                     }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
                                     if (cameras.size > 1) {
                                         TextButton(onClick = { onSetDefault(camera) }) {
                                             Text(if (isDefault) L10n.t("取消默认", "Unset Default") else L10n.t("设为默认", "Set Default"))
                                         }
                                     }
                                     TextButton(onClick = { pendingDelete = camera }) {
-                                        Text(L10n.t("删除", "Delete"))
+                                        Text(L10n.t("删除", "Delete"), color = MaterialTheme.colorScheme.error)
                                     }
                                 }
                             }
