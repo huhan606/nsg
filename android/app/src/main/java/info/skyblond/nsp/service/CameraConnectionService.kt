@@ -192,6 +192,14 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 pairingSession.writeGeo(payload)
                 updateServiceState(ConnectionState.Busy)
                 logEvent(L10n.t("暂无定位，发送兜底数据", "No fix yet; sending fallback data"))
+                geoTimeoutJob?.cancel()
+                geoTimeoutJob = serviceScope.launch {
+                    delay(10_000)
+                    if (state.value is ConnectionState.Busy) {
+                        updateServiceState(ConnectionState.Ready)
+                        logEvent(L10n.t("GPS 写入超时，已恢复就绪", "GPS write timed out; back to ready"))
+                    }
+                }
             }
         }
     }

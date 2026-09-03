@@ -41,6 +41,6 @@ tasks.test {
 
 tasks.jar {
     manifest {
-        attributes["Main-Class"] = "info.skyblond.nsp.MainKt"
+        attributes["Main-Class"] = "info.skyblond.nsg.MainKt"
     }
 }

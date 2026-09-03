@@ -21,6 +21,9 @@ object GeoPayloadGenerator {
         val latCoord = decimalToNikon(latitude, 'N', 'S')
         val lonCoord = decimalToNikon(longitude, 'E', 'W')
 
+        val isPositive = altitude >= 0.0
+        val altAbs = altitude.absoluteValue.toInt()
+
         val buffer = ByteBuffer.allocate(41).order(ByteOrder.LITTLE_ENDIAN)
         buffer.putShort(HEADER)
         buffer.put(latCoord.direction.code.toByte())
@@ -34,8 +37,8 @@ object GeoPayloadGenerator {
         buffer.put(lonCoord.submin1.toByte())
         buffer.put(lonCoord.submin2.toByte())
         buffer.put(4.toByte()) // satellites (not available from Location API; fixed plausible value)
-        buffer.put('P'.code.toByte()) // altitude ref = positive
-        buffer.putShort(altitude.toInt().toShort())
+        buffer.put((if (isPositive) 'P' else 'M').code.toByte()) // altitude ref: 'P' positive, 'M' negative
+        buffer.putShort(altAbs.toShort())
         // Embedded 7-byte time: year LE, month, day, hour, minute, second
         buffer.putShort(timestamp.year.toShort())
         buffer.put(timestamp.monthValue.toByte())
@@ -54,7 +57,8 @@ object GeoPayloadGenerator {
     fun buildFake(): ByteArray {
         val lat = Random.nextDouble(-90.0, 90.0)
         val lon = Random.nextDouble(-180.0, 180.0)
-        val alt = Random.nextInt(0, 5000)
+        val alt = Random.nextInt(-500, 5000)
+        val isPositive = alt >= 0
         val satellites = Random.nextInt(3, 13)
         val now = ZonedDateTime.now(ZoneOffset.UTC)
 
@@ -74,8 +78,8 @@ object GeoPayloadGenerator {
         buffer.put(lonCoord.submin1.toByte())
         buffer.put(lonCoord.submin2.toByte())
         buffer.put(satellites.toByte())
-        buffer.put('P'.code.toByte()) // altitude ref = positive
-        buffer.putShort(alt.toShort())
+        buffer.put((if (isPositive) 'P' else 'M').code.toByte()) // altitude ref: 'P' positive, 'M' negative
+        buffer.putShort(alt.absoluteValue.toShort())
         // Embedded 7-byte time: year LE, month, day, hour, minute, second
         buffer.putShort(now.year.toShort())
         buffer.put(now.monthValue.toByte())

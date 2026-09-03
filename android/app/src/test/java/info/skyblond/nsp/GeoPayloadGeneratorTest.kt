@@ -25,4 +25,22 @@ class GeoPayloadGeneratorTest {
         val standard = payload.copyOfRange(25, 31).toString(Charsets.US_ASCII)
         assertEquals("WGS-84", standard)
     }
+
+    @Test
+    fun positiveAltitudeIsEncodedWithPAndAbsoluteValue() {
+        val now = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC)
+        val payload = GeoPayloadGenerator.build(31.23, 121.47, 150.0, now)
+        assertEquals('P'.code.toByte(), payload[13])
+        val alt = (payload[14].toInt() and 0xFF) or ((payload[15].toInt() and 0xFF) shl 8)
+        assertEquals(150, alt)
+    }
+
+    @Test
+    fun negativeAltitudeIsEncodedWithMAndAbsoluteValue() {
+        val now = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC)
+        val payload = GeoPayloadGenerator.build(31.23, 121.47, -28.0, now)
+        assertEquals('M'.code.toByte(), payload[13])
+        val alt = (payload[14].toInt() and 0xFF) or ((payload[15].toInt() and 0xFF) shl 8)
+        assertEquals(28, alt)
+    }
 }

@@ -29,14 +29,16 @@ object BleHelpers {
      * SnapBridge-style controller name: "Android_" + sanitized Build.MODEL + "_%04d".
      */
     fun generateSnapBridgeControllerName(): String {
-        val model = Build.MODEL.replace(Regex("[^\\x21-\\x7e]"), "_")
+        val prefix = "Android_"
         val suffix = String.format(Locale.US, "_%04d", Random().nextInt(10000))
-        val clientName = if (model.length > 31 - suffix.length) {
-            model.substring(0, 31 - suffix.length) + suffix
+        val maxModelLen = 31 - prefix.length - suffix.length
+        val sanitizedModel = Build.MODEL.replace(Regex("[^\\x21-\\x7e]"), "_")
+        val modelPart = if (sanitizedModel.length > maxModelLen) {
+            sanitizedModel.substring(0, maxModelLen)
         } else {
-            model + suffix
+            sanitizedModel
         }
-        return "Android_" + clientName
+        return "$prefix$modelPart$suffix"
     }
 
     fun formatTimestamp(ms: Long): String {

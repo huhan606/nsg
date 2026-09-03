@@ -939,6 +939,9 @@ class NikonPairingSession(
                 )
                 host.updateState(ConnectionState.Error("Pairing rejected by camera (status=$status)"))
             }
+            if (uuid == CameraBleManager.GEO_UUID && host.currentState() is ConnectionState.Busy) {
+                host.updateState(ConnectionState.Ready)
+            }
             return
         }
         when (uuid) {
