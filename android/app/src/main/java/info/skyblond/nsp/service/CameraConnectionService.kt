@@ -97,6 +97,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         refreshSavedCameras()
         NotificationHelper.createChannel(this)
 
+        isRunning = true
+        currentConnectionState = ConnectionState.Idle
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             gnssStatusCallback = object : GnssStatus.Callback() {
                 override fun onSatelliteStatusChanged(status: GnssStatus) {
@@ -140,6 +143,8 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
+        currentConnectionState = ConnectionState.Idle
         pairingSession.dispose()
         keepAliveJob?.cancel()
         stopLocationUpdates()
@@ -511,8 +516,18 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     private fun updateServiceState(newState: ConnectionState) {
         val oldState = _state.value
         _state.value = newState
+        currentConnectionState = newState
         val canSendGeo = newState is ConnectionState.Ready || newState is ConnectionState.Busy
         NotificationHelper.update(this, newState.label, canSendGeo)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                android.service.quicksettings.TileService.requestListeningState(
+                    this,
+                    android.content.ComponentName(this, NikonGpsTileService::class.java)
+                )
+            } catch (_: Exception) {}
+        }
 
         if (oldState is ConnectionState.Busy && newState is ConnectionState.Ready) {
             HapticHelper.vibrateGeoSent(this)
@@ -531,6 +546,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     companion object {
+        var isRunning: Boolean = false
+            private set
+        var currentConnectionState: ConnectionState = ConnectionState.Idle
+            private set
+
         private const val GPS_UPDATE_INTERVAL_MS = 5_000L
         private const val NETWORK_UPDATE_INTERVAL_MS = 15_000L
         private const val GPS_UPDATE_MIN_DISTANCE_M = 1f
