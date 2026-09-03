@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -136,6 +139,7 @@ private fun MainScreen(viewModel: MainViewModel) {
     val settingsRepo = remember { SettingsRepository(context) }
     var spoofName by remember { mutableStateOf(settingsRepo.spoofControllerName() ?: "") }
     var fixedDeviceId by remember { mutableStateOf(settingsRepo.fixedDeviceIdRaw() ?: "") }
+    var gpsIntervalSeconds by remember { mutableIntStateOf(settingsRepo.gpsIntervalSeconds()) }
     var showAdvancedSettingsPage by remember { mutableStateOf(false) }
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     val batteryExempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
@@ -152,6 +156,17 @@ private fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
+    val onOpenAppSettings = {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
     val onSpoofNameChange: (String) -> Unit = { value ->
         val sanitized = value.filter { c -> c.code < 128 }.take(32)
         spoofName = sanitized
@@ -162,6 +177,12 @@ private fun MainScreen(viewModel: MainViewModel) {
         val sanitized = value.filter { c -> c.code < 128 }.take(16)
         fixedDeviceId = sanitized
         settingsRepo.setFixedDeviceId(sanitized)
+    }
+
+    val onGpsIntervalChange: (Int) -> Unit = { seconds ->
+        gpsIntervalSeconds = seconds
+        settingsRepo.setGpsIntervalSeconds(seconds)
+        viewModel.onGpsIntervalChanged(seconds)
     }
 
     LaunchedEffect(Unit) {
@@ -198,6 +219,8 @@ private fun MainScreen(viewModel: MainViewModel) {
             onSpoofNameChange = onSpoofNameChange,
             fixedDeviceId = fixedDeviceId,
             onFixedDeviceIdChange = onFixedDeviceIdChange,
+            gpsIntervalSeconds = gpsIntervalSeconds,
+            onGpsIntervalChange = onGpsIntervalChange,
             onBack = { showAdvancedSettingsPage = false }
         )
         return
@@ -263,7 +286,8 @@ private fun MainScreen(viewModel: MainViewModel) {
                             )
                             BatteryExemptionCard(
                                 batteryExempt = batteryExempt,
-                                onClick = onBatteryClick
+                                onBatteryClick = onBatteryClick,
+                                onOpenAppSettings = onOpenAppSettings
                             )
                         }
 
@@ -309,7 +333,8 @@ private fun MainScreen(viewModel: MainViewModel) {
                     )
                     BatteryExemptionCard(
                         batteryExempt = batteryExempt,
-                        onClick = onBatteryClick
+                        onBatteryClick = onBatteryClick,
+                        onOpenAppSettings = onOpenAppSettings
                     )
                     EventsTerminalCard(
                         uiState = uiState,
@@ -395,7 +420,7 @@ private fun HeaderBar(
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text(L10n.t("高级设置（一般无需更改）", "Advanced settings (no changes needed)")) },
+                    text = { Text(L10n.t("高级与省电设置", "Advanced & Power Settings")) },
                     onClick = {
                         menuOpen = false
                         onOpenAdvanced()
@@ -721,15 +746,18 @@ private fun ActionButton(
 }
 
 /**
- * Compact Battery Optimization Card showing status and providing quick settings access.
+ * Compact Battery Optimization Card showing status and providing direct access
+ * to system application permissions and battery optimization settings.
  */
 @Composable
-private fun BatteryExemptionCard(batteryExempt: Boolean, onClick: () -> Unit) {
+private fun BatteryExemptionCard(
+    batteryExempt: Boolean,
+    onBatteryClick: () -> Unit,
+    onOpenAppSettings: () -> Unit
+) {
     OutlinedCard(
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
@@ -744,22 +772,35 @@ private fun BatteryExemptionCard(batteryExempt: Boolean, onClick: () -> Unit) {
                     .clip(CircleShape)
                     .background(if (batteryExempt) StatusReady else StatusBusy)
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onBatteryClick)
+            ) {
                 Text(
                     text = if (batteryExempt) {
-                        L10n.t("电池优化：已豁免（后台运行稳定）", "Battery: Exempt (reliable background)")
+                        L10n.t("电池优化：已豁免（后台稳定运行）", "Battery: Exempt (runs in background)")
                     } else {
-                        L10n.t("电池优化：未豁免（点击允许后台运行）", "Battery: Not exempt (tap to allow)")
+                        L10n.t("电池优化：未豁免（点击申请白名单）", "Battery: Not exempt (tap to allow)")
                     },
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                     color = if (batteryExempt) MaterialTheme.colorScheme.onSurface else StatusBusy
                 )
             }
-            Text(
-                text = L10n.t("设置", "Config"),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.primary
-            )
+
+            // Clickable button that jumps directly to system application details / permissions
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                modifier = Modifier.clickable(onClick = onOpenAppSettings)
+            ) {
+                Text(
+                    text = L10n.t("系统权限", "Permissions"),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
         }
     }
 }
@@ -847,33 +888,34 @@ private fun EventsTerminalCard(
     }
 }
 
-/** Standalone advanced-settings page with input fields and a back button. */
+/**
+ * Standalone advanced-settings and power rules page.
+ * Utilizes Scaffold and insets padding to completely prevent collision with the system status bar.
+ */
 @Composable
 private fun AdvancedSettingsPage(
     spoofName: String,
     onSpoofNameChange: (String) -> Unit,
     fixedDeviceId: String,
     onFixedDeviceIdChange: (String) -> Unit,
+    gpsIntervalSeconds: Int,
+    onGpsIntervalChange: (Int) -> Unit,
     onBack: () -> Unit
 ) {
-    Surface(
+    Scaffold(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Column(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Surface(
                 modifier = Modifier
-                    .widthIn(max = 680.dp)
-                    .fillMaxSize()
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxWidth()
+                    .statusBarsPadding(),
+                color = MaterialTheme.colorScheme.background
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
@@ -884,18 +926,49 @@ private fun AdvancedSettingsPage(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = L10n.t("高级设置", "Advanced Settings"),
+                        text = L10n.t("高级与省电设置", "Advanced & Power Settings"),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Section 1: GPS Send Interval & Power Rules
+                GpsIntervalSection(
+                    intervalSeconds = gpsIntervalSeconds,
+                    onIntervalChange = onGpsIntervalChange
+                )
 
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                // Section 2: SnapBridge Compatibility & Identity
+                Text(
+                    text = L10n.t("相机标识与 SnapBridge 兼容", "Camera Identity & SnapBridge"),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Text(
                     text = L10n.t(
-                        "以下设置一般无需更改；仅在切换 SnapBridge 设备或重新提取标识后需要调整。",
-                        "These are usually fine as-is; only adjust after switching SnapBridge devices or re-extracting the ID."
+                        "以下设置一般无需更改；仅在希望与官方 SnapBridge 软件无缝切换共用配对记录时填写。",
+                        "These are usually fine as-is; only adjust if switching seamlessly with Nikon SnapBridge."
                     ),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
@@ -910,7 +983,177 @@ private fun AdvancedSettingsPage(
                     onValueChange = onFixedDeviceIdChange,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
+        }
+    }
+}
+
+/**
+ * Interactive GPS transmission interval & power-saving rules card.
+ */
+@Composable
+private fun GpsIntervalSection(
+    intervalSeconds: Int,
+    onIntervalChange: (Int) -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column {
+                Text(
+                    text = L10n.t("GPS 发送与省电规则", "GPS Transmission & Battery Rules"),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = L10n.t(
+                        "控制定位与蓝牙发送频率，有效延长手机与相机电池续航",
+                        "Control send frequency to reduce GPS & Bluetooth battery usage"
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            val presets = listOf(
+                15 to L10n.t("15秒 (高频)", "15s (Fast)"),
+                30 to L10n.t("30秒 (推荐)", "30s (Balanced)"),
+                60 to L10n.t("1分钟 (省电)", "1m (Saver)"),
+                300 to L10n.t("5分钟 (续航)", "5m (Endurance)")
+            )
+
+            var isCustom by remember { mutableStateOf(!presets.any { it.first == intervalSeconds }) }
+            var customInput by remember { mutableStateOf(if (isCustom) intervalSeconds.toString() else "") }
+
+            // Preset Options Grid (2x2)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presets.take(2).forEach { (sec, label) ->
+                        val selected = !isCustom && intervalSeconds == sec
+                        IntervalOptionChip(
+                            label = label,
+                            selected = selected,
+                            onClick = {
+                                isCustom = false
+                                onIntervalChange(sec)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presets.drop(2).take(2).forEach { (sec, label) ->
+                        val selected = !isCustom && intervalSeconds == sec
+                        IntervalOptionChip(
+                            label = label,
+                            selected = selected,
+                            onClick = {
+                                isCustom = false
+                                onIntervalChange(sec)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                IntervalOptionChip(
+                    label = if (isCustom) "${L10n.t("自定义", "Custom")}: ${intervalSeconds}秒" else L10n.t("自定义间隔秒数...", "Custom Seconds..."),
+                    selected = isCustom,
+                    onClick = {
+                        isCustom = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (isCustom) {
+                OutlinedTextField(
+                    value = customInput,
+                    onValueChange = { str ->
+                        val filtered = str.filter { it.isDigit() }.take(4)
+                        customInput = filtered
+                        val value = filtered.toIntOrNull()
+                        if (value != null && value in 10..3600) {
+                            onIntervalChange(value)
+                        }
+                    },
+                    label = { Text(L10n.t("自定义发送间隔 (10 ~ 3600 秒)", "Custom interval (10 ~ 3600s)")) },
+                    placeholder = { Text(L10n.t("例如 45 或 120", "e.g. 45 or 120")) },
+                    supportingText = {
+                        Text(
+                            L10n.t(
+                                "当前生效间隔：${intervalSeconds} 秒。静止或移动时均按此周期唤醒发送。",
+                                "Active interval: ${intervalSeconds}s. Position reports duty-cycle with this interval."
+                            )
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = L10n.t(
+                        "💡 省电建议：日常扫街推荐「30秒」或「1分钟」；若长时间慢速拍摄，设为「5分钟」可让手机 GPS 芯片完全进入 Duty-Cycle 休眠，功耗减少 70% 以上。",
+                        "💡 Battery Tip: \"30s\" or \"1m\" is ideal for daily walks; for long static shoots, \"5m\" allows the phone GNSS chip to enter duty-cycle sleep, saving over 70% power."
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntervalOptionChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) NikonYellow.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = if (selected) NikonYellow else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+        ),
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (selected) NikonYellow else MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
