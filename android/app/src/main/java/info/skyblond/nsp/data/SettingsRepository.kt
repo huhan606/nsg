@@ -120,6 +120,18 @@ class SettingsRepository(context: Context) {
         store(current)
     }
 
+    /**
+     * GPS send interval in seconds.
+     * Common options: 15 (high-res), 30 (balanced/default), 60 (battery saver), 300 (ultra endurance).
+     */
+    fun gpsIntervalSeconds(): Int = prefs.getInt(KEY_GPS_INTERVAL_SECONDS, 30).coerceIn(10, 3600)
+
+    fun setGpsIntervalSeconds(seconds: Int) {
+        prefs.edit()
+            .putInt(KEY_GPS_INTERVAL_SECONDS, seconds.coerceIn(10, 3600))
+            .apply()
+    }
+
     private fun store(cameras: List<PairedCamera>) {
         prefs.edit()
             .putStringSet(KEY_CAMERAS, cameras.map { it.toJson() }.toSet())
@@ -133,6 +145,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_DEFAULT_CONNECT = "default_connect_camera"
         private const val KEY_SPOOF_NAME = "spoof_controller_name"
         private const val KEY_FIXED_DEVICE_ID = "fixed_device_id"
+        private const val KEY_GPS_INTERVAL_SECONDS = "gps_interval_seconds"
     }
 }
 

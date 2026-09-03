@@ -247,13 +247,32 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         maybeSendGeo(location)
     }
 
+    fun applyGpsInterval(seconds: Int) {
+        settingsRepository.setGpsIntervalSeconds(seconds)
+        if (locationManager != null) {
+            startLocationUpdates()
+        }
+        startKeepAlive()
+        logEvent(L10n.t("GPS 发送间隔已调整为 %d 秒", "GPS send interval updated to %ds").format(seconds))
+    }
+
+    private fun maxSendIntervalMs(): Long {
+        val seconds = if (::settingsRepository.isInitialized) {
+            settingsRepository.gpsIntervalSeconds()
+        } else {
+            30
+        }
+        return seconds * 1000L
+    }
+
     private fun maybeSendGeo(location: Location) {
         if (state.value != ConnectionState.Ready) return
         val now = System.currentTimeMillis()
         val last = lastSentLocation
         val distance = if (last != null) location.distanceTo(last) else Float.MAX_VALUE
+        val maxInterval = maxSendIntervalMs()
         // Skip sending when the position barely moved and we sent recently (low-power).
-        if (last == null || distance > MIN_SEND_DISTANCE_M || now - lastSentTime > MAX_SEND_INTERVAL_MS) {
+        if (last == null || distance > MIN_SEND_DISTANCE_M || now - lastSentTime > maxInterval) {
             sendGeo(location)
         }
     }
@@ -305,10 +324,19 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 .minByOrNull { it.accuracy }
             lastLocation?.let(::sendGeo)
 
+            val intervalMs = maxSendIntervalMs()
+            val gpsInterval = (intervalMs / 2).coerceIn(5_000L, 60_000L)
+            val networkInterval = intervalMs.coerceIn(15_000L, 120_000L)
+
+            // Remove existing listener before re-registering
+            try {
+                lm.removeUpdates(locationListener)
+            } catch (_: Exception) {}
+
             if (hasGps) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    GPS_UPDATE_INTERVAL_MS,
+                    gpsInterval,
                     GPS_UPDATE_MIN_DISTANCE_M,
                     locationListener,
                     Looper.getMainLooper()
@@ -317,13 +345,13 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             if (hasNetwork) {
                 lm.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
-                    NETWORK_UPDATE_INTERVAL_MS,
+                    networkInterval,
                     GPS_UPDATE_MIN_DISTANCE_M,
                     locationListener,
                     Looper.getMainLooper()
                 )
             }
-            logEvent(L10n.t("已开启定位追踪（省电模式）", "Location tracking enabled (battery saver)"))
+            logEvent(L10n.t("已开启定位追踪（发送间隔 %d 秒）", "Location tracking enabled (interval %ds)").format(intervalMs / 1000))
         } catch (e: SecurityException) {
             logEvent(L10n.t("缺少定位权限，无法获取 GPS", "Missing location permission; cannot get GPS"))
         }
@@ -342,11 +370,12 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         stopKeepAlive()
         keepAliveJob = serviceScope.launch {
             while (isActive) {
-                delay(30_000)
+                val intervalMs = maxSendIntervalMs()
+                delay(intervalMs.coerceAtLeast(15_000L))
                 val loc = lastLocation
                 if (loc != null &&
                     state.value == ConnectionState.Ready &&
-                    System.currentTimeMillis() - lastSentTime > 25_000
+                    System.currentTimeMillis() - lastSentTime >= (intervalMs - 2_000L)
                 ) {
                     sendGeo(loc)
                 }

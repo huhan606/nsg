@@ -175,6 +175,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(showSavedDialog = false) }
     }
 
+    fun onGpsIntervalChanged(seconds: Int) {
+        service?.applyGpsInterval(seconds)
+    }
+
     data class UiState(
         val serviceBound: Boolean = false,
         val connectionState: ConnectionState = ConnectionState.Idle,
