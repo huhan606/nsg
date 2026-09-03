@@ -132,6 +132,20 @@ class SettingsRepository(context: Context) {
             .apply()
     }
 
+    /** Tactile vibration feedback on connection and GPS events. Defaults to true. */
+    fun isHapticFeedbackEnabled(): Boolean = prefs.getBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, true)
+
+    fun setHapticFeedbackEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HAPTIC_FEEDBACK_ENABLED, enabled).apply()
+    }
+
+    /** Whether to record GPS positions to an in-memory / local GPX session track. Defaults to false. */
+    fun isTrackLoggingEnabled(): Boolean = prefs.getBoolean(KEY_TRACK_LOGGING_ENABLED, false)
+
+    fun setTrackLoggingEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TRACK_LOGGING_ENABLED, enabled).apply()
+    }
+
     private fun store(cameras: List<PairedCamera>) {
         prefs.edit()
             .putStringSet(KEY_CAMERAS, cameras.map { it.toJson() }.toSet())
@@ -146,6 +160,8 @@ class SettingsRepository(context: Context) {
         private const val KEY_SPOOF_NAME = "spoof_controller_name"
         private const val KEY_FIXED_DEVICE_ID = "fixed_device_id"
         private const val KEY_GPS_INTERVAL_SECONDS = "gps_interval_seconds"
+        private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
+        private const val KEY_TRACK_LOGGING_ENABLED = "track_logging_enabled"
     }
 }
 

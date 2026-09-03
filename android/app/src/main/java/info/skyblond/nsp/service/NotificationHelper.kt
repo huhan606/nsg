@@ -17,6 +17,7 @@ object NotificationHelper {
     const val CHANNEL_ID = "camera_connection_channel"
     const val NOTIFICATION_ID = 1
     const val ACTION_DISCONNECT = "info.skyblond.nsp.DISCONNECT"
+    const val ACTION_SEND_GEO = "info.skyblond.nsp.SEND_GEO"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -32,7 +33,7 @@ object NotificationHelper {
         }
     }
 
-    fun build(context: Context, statusText: String): Notification {
+    fun build(context: Context, statusText: String, canSendGeo: Boolean = false): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
             0,
@@ -43,24 +44,47 @@ object NotificationHelper {
         )
         val disconnectIntent = PendingIntent.getService(
             context,
-            0,
+            1,
             Intent(context, CameraConnectionService::class.java).apply {
                 action = ACTION_DISCONNECT
             },
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(L10n.t("尼康智能GPS", "Nikon Smart GPS"))
             .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(contentIntent)
-            .addAction(R.drawable.ic_launcher_foreground, L10n.t("断开", "Disconnect"), disconnectIntent)
             .setOngoing(true)
-            .build()
+
+        if (canSendGeo) {
+            val sendGeoIntent = PendingIntent.getService(
+                context,
+                2,
+                Intent(context, CameraConnectionService::class.java).apply {
+                    action = ACTION_SEND_GEO
+                },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                R.drawable.ic_launcher_foreground,
+                L10n.t("立即同步", "Sync Now"),
+                sendGeoIntent
+            )
+        }
+
+        builder.addAction(
+            R.drawable.ic_launcher_foreground,
+            L10n.t("断开", "Disconnect"),
+            disconnectIntent
+        )
+
+        return builder.build()
     }
 
-    fun update(context: Context, statusText: String) {
+    fun update(context: Context, statusText: String, canSendGeo: Boolean = false) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, build(context, statusText))
+        manager.notify(NOTIFICATION_ID, build(context, statusText, canSendGeo))
     }
 }

@@ -17,7 +17,13 @@ object GeoPayloadGenerator {
     /**
      * Builds a 41-byte GEO payload from a real location fix.
      */
-    fun build(latitude: Double, longitude: Double, altitude: Double, timestamp: ZonedDateTime): ByteArray {
+    fun build(
+        latitude: Double,
+        longitude: Double,
+        altitude: Double,
+        timestamp: ZonedDateTime,
+        satellites: Int = 4
+    ): ByteArray {
         val latCoord = decimalToNikon(latitude, 'N', 'S')
         val lonCoord = decimalToNikon(longitude, 'E', 'W')
 
@@ -36,7 +42,7 @@ object GeoPayloadGenerator {
         buffer.put(lonCoord.minutes.toByte())
         buffer.put(lonCoord.submin1.toByte())
         buffer.put(lonCoord.submin2.toByte())
-        buffer.put(4.toByte()) // satellites (not available from Location API; fixed plausible value)
+        buffer.put(satellites.coerceIn(1, 32).toByte()) // satellites
         buffer.put((if (isPositive) 'P' else 'M').code.toByte()) // altitude ref: 'P' positive, 'M' negative
         buffer.putShort(altAbs.toShort())
         // Embedded 7-byte time: year LE, month, day, hour, minute, second

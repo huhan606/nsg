@@ -32,7 +32,10 @@ data class GpsState(
     val hasFix: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val altitude: Double? = null,
     val accuracyMeters: Float? = null,
+    val satellites: Int? = null,
+    val totalSatellites: Int? = null,
     val lastFixTime: Long? = null,
     val lastSentTime: Long? = null
 )

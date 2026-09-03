@@ -43,4 +43,15 @@ class GeoPayloadGeneratorTest {
         val alt = (payload[14].toInt() and 0xFF) or ((payload[15].toInt() and 0xFF) shl 8)
         assertEquals(28, alt)
     }
+
+    @Test
+    fun satellitesAreProperlyEncodedAtOffset12() {
+        val now = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC)
+        val payload = GeoPayloadGenerator.build(31.23, 121.47, 10.0, now, satellites = 18)
+        assertEquals(18.toByte(), payload[12])
+
+        // Clamped max
+        val payloadMax = GeoPayloadGenerator.build(31.23, 121.47, 10.0, now, satellites = 99)
+        assertEquals(32.toByte(), payloadMax[12])
+    }
 }

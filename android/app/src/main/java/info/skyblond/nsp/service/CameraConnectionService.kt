@@ -7,11 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.location.GnssStatus
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
@@ -20,6 +22,7 @@ import info.skyblond.nsp.data.DiscoveredCamera
 import info.skyblond.nsp.data.PairedCamera
 import info.skyblond.nsp.data.SettingsRepository
 import info.skyblond.nsp.ui.L10n
+import info.skyblond.nsp.util.HapticHelper
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +59,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     private var geoTimeoutJob: kotlinx.coroutines.Job? = null
 
     private var locationManager: LocationManager? = null
+    private var gnssStatusCallback: Any? = null
     private var lastLocation: Location? = null
     private var lastSentLocation: Location? = null
     private var lastSentTime: Long = 0L
@@ -92,13 +96,32 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         _defaultCameraName.value = settingsRepository.defaultConnectCameraName()
         refreshSavedCameras()
         NotificationHelper.createChannel(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            gnssStatusCallback = object : GnssStatus.Callback() {
+                override fun onSatelliteStatusChanged(status: GnssStatus) {
+                    val total = status.satelliteCount
+                    var used = 0
+                    for (i in 0 until total) {
+                        if (status.usedInFix(i)) used++
+                    }
+                    _gpsState.update { it.copy(satellites = used, totalSatellites = total) }
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == NotificationHelper.ACTION_DISCONNECT) {
-            disconnect()
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            NotificationHelper.ACTION_DISCONNECT -> {
+                disconnect()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            NotificationHelper.ACTION_SEND_GEO -> {
+                sendGeoOnce()
+                return START_STICKY
+            }
         }
         startForegroundCompat()
         autoReconnectLastCamera()
@@ -142,6 +165,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     override fun onSessionReady() {
+        HapticHelper.vibrateConnectSuccess(this)
         startLocationUpdates()
         startKeepAlive()
     }
@@ -240,6 +264,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 hasFix = true,
                 latitude = location.latitude,
                 longitude = location.longitude,
+                altitude = location.altitude,
                 accuracyMeters = location.accuracy,
                 lastFixTime = System.currentTimeMillis()
             )
@@ -279,11 +304,13 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     private fun sendGeo(location: Location) {
         if (state.value != ConnectionState.Ready) return
+        val sats = _gpsState.value.satellites ?: 4
         val payload = GeoPayloadGenerator.build(
             latitude = location.latitude,
             longitude = location.longitude,
             altitude = location.altitude,
-            timestamp = ZonedDateTime.now(ZoneOffset.UTC)
+            timestamp = ZonedDateTime.now(ZoneOffset.UTC),
+            satellites = sats
         )
         pairingSession.writeGeo(payload)
         lastSentLocation = location
@@ -333,6 +360,16 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 lm.removeUpdates(locationListener)
             } catch (_: Exception) {}
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && hasLocationPermission()) {
+                try {
+                    (gnssStatusCallback as? GnssStatus.Callback)?.let {
+                        lm.registerGnssStatusCallback(it, Handler(Looper.getMainLooper()))
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "registerGnssStatusCallback failed: ${e.message}")
+                }
+            }
+
             if (hasGps) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
@@ -358,6 +395,13 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     private fun stopLocationUpdates() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                (gnssStatusCallback as? GnssStatus.Callback)?.let {
+                    locationManager?.unregisterGnssStatusCallback(it)
+                }
+            } catch (_: Exception) {}
+        }
         try {
             locationManager?.removeUpdates(locationListener)
         } catch (_: Exception) {
@@ -426,7 +470,8 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
      * giving up.
      */
     private fun startForegroundCompat() {
-        val notification = NotificationHelper.build(this, state.value.label)
+        val canSendGeo = state.value is ConnectionState.Ready || state.value is ConnectionState.Busy
+        val notification = NotificationHelper.build(this, state.value.label, canSendGeo)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             startForeground(NotificationHelper.NOTIFICATION_ID, notification)
             return
@@ -464,8 +509,16 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     // -------------------------------------------------------------------------
 
     private fun updateServiceState(newState: ConnectionState) {
+        val oldState = _state.value
         _state.value = newState
-        NotificationHelper.update(this, newState.label)
+        val canSendGeo = newState is ConnectionState.Ready || newState is ConnectionState.Busy
+        NotificationHelper.update(this, newState.label, canSendGeo)
+
+        if (oldState is ConnectionState.Busy && newState is ConnectionState.Ready) {
+            HapticHelper.vibrateGeoSent(this)
+        } else if ((oldState is ConnectionState.Ready || oldState is ConnectionState.Busy) && newState is ConnectionState.Idle) {
+            HapticHelper.vibrateDisconnect(this)
+        }
     }
 
     private fun logEvent(message: String) {

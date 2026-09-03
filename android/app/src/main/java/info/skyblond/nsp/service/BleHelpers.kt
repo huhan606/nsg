@@ -32,7 +32,8 @@ object BleHelpers {
         val prefix = "Android_"
         val suffix = String.format(Locale.US, "_%04d", Random().nextInt(10000))
         val maxModelLen = 31 - prefix.length - suffix.length
-        val sanitizedModel = Build.MODEL.replace(Regex("[^\\x21-\\x7e]"), "_")
+        val rawModel = Build.MODEL ?: "Device"
+        val sanitizedModel = rawModel.replace(Regex("[^\\x21-\\x7e]"), "_")
         val modelPart = if (sanitizedModel.length > maxModelLen) {
             sanitizedModel.substring(0, maxModelLen)
         } else {
