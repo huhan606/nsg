@@ -1,0 +1,10 @@
+# Local build release directory and APKs
+release/
+*.apk
+*.aab
+*.keystore
+keystore.properties
+
+# OS files
+.DS_Store
+Thumbs.db
