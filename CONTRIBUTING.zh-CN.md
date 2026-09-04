@@ -29,20 +29,28 @@
 - Android SDK，包含 platform 36（或者直接使用 Android Studio）
 - Gradle 由 wrapper 提供（`android/gradlew`）
 
-构建：
+构建调试版本（Debug APK）：
 
 ```sh
 cd android
 ./gradlew :app:assembleDebug
 ```
 
+构建发布版本（Release APK）：
+
+```sh
+cd android
+./gradlew :app:assembleRelease
+```
+
 运行单元测试：
 
 ```sh
+cd android
 ./gradlew :app:testDebugUnitTest
 ```
 
-调试 APK 生成于 `android/app/build/outputs/apk/debug/`。你也可以在 Android Studio 中打开 `android/` 目录并直接运行到设备上。
+APK 生成于 `android/app/build/outputs/apk/debug/` 与 `android/app/build/outputs/apk/release/`。你也可以在 Android Studio 中打开 `android/` 目录并直接运行到设备上。
 
 ### ESP32 固件
 
