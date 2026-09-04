@@ -14,11 +14,12 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <!-- Nikon Yellow Bar Accent -->
-        <View
+        <!-- Nikon Yellow Bar Accent (Using ImageView since View is disallowed in RemoteViews) -->
+        <ImageView
             android:layout_width="3dp"
             android:layout_height="14dp"
-            android:background="#FFE500" />
+            android:background="#FFE500"
+            android:contentDescription="@null" />
 
         <TextView
             android:layout_width="0dp"
@@ -58,7 +59,8 @@
             android:textColor="#E6E6E6"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:singleLine="true" />
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/widget_telemetry_text"
@@ -68,36 +70,43 @@
             android:text="GPS 待命 · 等待连接相机"
             android:textColor="#8C9098"
             android:textSize="10sp"
-            android:singleLine="true" />
+            android:maxLines="1"
+            android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- Action Buttons Row -->
+    <!-- Action Buttons Row (Using TextView for cross-launcher RemoteViews compatibility) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/widget_btn_action"
             android:layout_width="0dp"
-            android:layout_height="34dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
             android:text="一键连接"
             android:textColor="#000000"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:background="@drawable/bg_widget_btn_primary" />
 
-        <Button
+        <TextView
             android:id="@+id/widget_btn_open"
             android:layout_width="wrap_content"
-            android:layout_height="34dp"
+            android:layout_height="36dp"
             android:layout_marginStart="8dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
             android:text="打开"
             android:textColor="#D0D0D0"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:background="@drawable/bg_widget_btn_outline" />
     </LinearLayout>
 </LinearLayout>

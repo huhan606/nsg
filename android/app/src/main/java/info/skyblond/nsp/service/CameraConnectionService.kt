@@ -125,6 +125,21 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
                 sendGeoOnce()
                 return START_STICKY
             }
+            ACTION_CONNECT -> {
+                startForegroundCompat()
+                val requestedName = intent.getStringExtra(EXTRA_CAMERA_NAME)
+                val cameras = settingsRepository.loadSavedCameras()
+                val target = requestedName?.let { name -> cameras.firstOrNull { it.name == name } }
+                    ?: cameras.firstOrNull { it.name == settingsRepository.defaultConnectCameraName() }
+                    ?: cameras.firstOrNull()
+                if (target != null) {
+                    logEvent(L10n.t("小组件请求连接：${target.displayName}", "Widget requested connection: ${target.displayName}"))
+                    connectToSavedCamera(target)
+                } else {
+                    autoReconnectLastCamera()
+                }
+                return START_STICKY
+            }
         }
         startForegroundCompat()
         autoReconnectLastCamera()
@@ -149,6 +164,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         keepAliveJob?.cancel()
         stopLocationUpdates()
         serviceScope.cancel()
+        try {
+            info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
+        } catch (_: Exception) {}
     }
 
     // -------------------------------------------------------------------------
@@ -170,14 +188,27 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     override fun onSessionReady() {
+        if (activeCameraDisplayName == null) {
+            val devName = pairingSession.currentDeviceName
+            val saved = settingsRepository.loadSavedCameras().firstOrNull { it.name == devName }
+            activeCameraDisplayName = saved?.displayName ?: devName
+        }
         HapticHelper.vibrateConnectSuccess(this)
         startLocationUpdates()
         startKeepAlive()
+        try {
+            info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
+        } catch (_: Exception) {}
     }
 
     override fun onSessionDisconnected() {
+        activeCameraDisplayName = null
+        lastFormattedLocation = null
         stopKeepAlive()
         stopLocationUpdates()
+        try {
+            info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
+        } catch (_: Exception) {}
     }
 
     // -------------------------------------------------------------------------
@@ -269,7 +300,16 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             settingsRepository.renameCamera(camera, newCustomName)
             refreshSavedCameras()
             val effective = newCustomName?.trim()?.takeIf { it.isNotBlank() } ?: camera.name
+            if (activeCameraDisplayName != null) {
+                val currentSaved = _savedCameras.value.firstOrNull { it.name == camera.name }
+                if (currentSaved != null) {
+                    activeCameraDisplayName = currentSaved.displayName
+                }
+            }
             logEvent(L10n.t("已将相机命名为 %s", "Camera renamed to %s").format(effective))
+            try {
+                info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this@CameraConnectionService)
+            } catch (_: Exception) {}
         }
     }
 
@@ -572,6 +612,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     }
 
     companion object {
+        const val ACTION_CONNECT = "info.skyblond.nsp.service.ACTION_CONNECT"
+        const val EXTRA_CAMERA_NAME = "info.skyblond.nsp.service.EXTRA_CAMERA_NAME"
+
         var isRunning: Boolean = false
             private set
         var currentConnectionState: ConnectionState = ConnectionState.Idle

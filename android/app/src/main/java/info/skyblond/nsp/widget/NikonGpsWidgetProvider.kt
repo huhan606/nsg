@@ -45,26 +45,41 @@ class NikonGpsWidgetProvider : AppWidgetProvider() {
             (CameraConnectionService.currentConnectionState is ConnectionState.Ready ||
              CameraConnectionService.currentConnectionState is ConnectionState.Busy)
 
-        if (isConnected) {
-            val disconnectIntent = Intent(context, CameraConnectionService::class.java).apply {
-                action = NotificationHelper.ACTION_DISCONNECT
+        try {
+            if (isConnected) {
+                val disconnectIntent = Intent(context, CameraConnectionService::class.java).apply {
+                    action = NotificationHelper.ACTION_DISCONNECT
+                }
+                context.startService(disconnectIntent)
+            } else {
+                val repo = SettingsRepository(context)
+                val cameras = repo.loadSavedCameras()
+                if (cameras.isEmpty()) {
+                    val appIntent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    context.startActivity(appIntent)
+                    return
+                }
+
+                val defaultName = repo.defaultConnectCameraName()
+                val targetCam = cameras.firstOrNull { it.name == defaultName } ?: cameras.firstOrNull()
+                val connectIntent = Intent(context, CameraConnectionService::class.java).apply {
+                    action = CameraConnectionService.ACTION_CONNECT
+                    if (targetCam != null) {
+                        putExtra(CameraConnectionService.EXTRA_CAMERA_NAME, targetCam.name)
+                    }
+                }
+                ContextCompat.startForegroundService(context, connectIntent)
             }
-            context.startService(disconnectIntent)
-        } else {
-            val repo = SettingsRepository(context)
-            val cameras = repo.loadSavedCameras()
-            if (cameras.isEmpty()) {
+        } catch (e: Exception) {
+            android.util.Log.e("NikonGpsWidget", "Failed to toggle connect from widget: ${e.message}", e)
+            try {
                 val appIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 context.startActivity(appIntent)
-                return
-            }
-
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, CameraConnectionService::class.java)
-            )
+            } catch (_: Exception) {}
         }
         updateAllWidgets(context)
     }
