@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
@@ -201,6 +202,23 @@ private fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
+    val onOpenNotificationSettings = {
+        try {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
     val onSpoofNameChange: (String) -> Unit = { value ->
         val sanitized = value.filter { c -> c.code < 128 }.take(32)
         spoofName = sanitized
@@ -265,6 +283,7 @@ private fun MainScreen(viewModel: MainViewModel) {
             batteryExempt = batteryExempt,
             onBatteryClick = onBatteryClick,
             onOpenAppSettings = onOpenAppSettings,
+            onOpenNotificationSettings = onOpenNotificationSettings,
             uiState = uiState,
             onBack = { showAdvancedSettingsPage = false }
         )
@@ -1018,53 +1037,93 @@ private fun ActionButton(
 private fun BatteryExemptionCard(
     batteryExempt: Boolean,
     onBatteryClick: () -> Unit,
-    onOpenAppSettings: () -> Unit
+    onOpenAppSettings: () -> Unit,
+    onOpenNotificationSettings: () -> Unit
 ) {
     OutlinedCard(
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (batteryExempt) StatusReady else StatusBusy)
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClick = onBatteryClick)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = if (batteryExempt) {
-                        L10n.t("电池优化：已豁免（后台稳定运行）", "Battery: Exempt (runs in background)")
-                    } else {
-                        L10n.t("电池优化：未豁免（点击申请白名单）", "Battery: Not exempt (tap to allow)")
-                    },
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    color = if (batteryExempt) MaterialTheme.colorScheme.onSurface else StatusBusy
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (batteryExempt) StatusReady else StatusBusy)
                 )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onBatteryClick)
+                ) {
+                    Text(
+                        text = if (batteryExempt) {
+                            L10n.t("电池优化：已豁免（后台稳定运行）", "Battery: Exempt (runs in background)")
+                        } else {
+                            L10n.t("电池优化：未豁免（点击申请白名单）", "Battery: Not exempt (tap to allow)")
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = if (batteryExempt) MaterialTheme.colorScheme.onSurface else StatusBusy
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    modifier = Modifier.clickable(onClick = onOpenAppSettings)
+                ) {
+                    Text(
+                        text = L10n.t("系统权限", "Permissions"),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
             }
 
-            // Clickable button that jumps directly to system application details / permissions
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                modifier = Modifier.clickable(onClick = onOpenAppSettings)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenNotificationSettings)
             ) {
-                Text(
-                    text = L10n.t("系统权限", "Permissions"),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = L10n.t("🔔 锁屏与通知栏胶囊权限", "🔔 Lockscreen & Notifications"),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = L10n.t("若锁屏息屏看不到胶囊，请进入系统设置开启「锁屏显示通知」与「公开内容」", "If not visible on lockscreen, ensure lockscreen notifications are enabled in system settings"),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "⚙️",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
             }
         }
     }
@@ -1175,6 +1234,7 @@ private fun AdvancedSettingsPage(
     batteryExempt: Boolean,
     onBatteryClick: () -> Unit,
     onOpenAppSettings: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     uiState: MainViewModel.UiState,
     onBack: () -> Unit
 ) {
@@ -1246,11 +1306,12 @@ private fun AdvancedSettingsPage(
                     onOpenConfigMigration = onOpenConfigMigration
                 )
 
-                // Section 4: Battery Optimization Settings
+                // Section 4: Battery Optimization & Notification Settings
                 BatteryExemptionCard(
                     batteryExempt = batteryExempt,
                     onBatteryClick = onBatteryClick,
-                    onOpenAppSettings = onOpenAppSettings
+                    onOpenAppSettings = onOpenAppSettings,
+                    onOpenNotificationSettings = onOpenNotificationSettings
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
