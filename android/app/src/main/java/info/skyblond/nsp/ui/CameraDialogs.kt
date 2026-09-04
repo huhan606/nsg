@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -77,13 +78,18 @@ fun SavedCameraDialog(
     onAutoExtract: (PairedCamera) -> Unit,
     onSetDefault: (PairedCamera) -> Unit,
     onDelete: (PairedCamera) -> Unit,
+    onRename: (PairedCamera, String?) -> Unit,
     defaultCameraName: String?,
     onDismiss: () -> Unit
 ) {
     var pendingDelete by remember { mutableStateOf<PairedCamera?>(null) }
+    var pendingRename by remember { mutableStateOf<PairedCamera?>(null) }
+    var renameInput by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = {
             pendingDelete = null
+            pendingRename = null
             onDismiss()
         },
         title = { Text(L10n.t("选择已保存的相机", "Select a saved camera")) },
@@ -96,8 +102,8 @@ fun SavedCameraDialog(
                         item {
                             Text(
                                 text = L10n.t(
-                                    "已保存 ${cameras.size} 台相机。可点「设为默认」选择启动时自动连接的相机，点「删除」移除。",
-                                    "${cameras.size} camera(s) saved. Use \"Set Default\" to pick the auto-connect camera at startup; \"Delete\" removes it."
+                                    "已保存 ${cameras.size} 台相机。可点「设为默认」选择启动时自动连接的相机，点「重命名」自定义别名。",
+                                    "${cameras.size} camera(s) saved. Use \"Set Default\" to pick auto-connect camera; \"Rename\" to set an alias."
                                 ),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -113,18 +119,26 @@ fun SavedCameraDialog(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 12.dp, top = 16.dp, end = 12.dp, bottom = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    .padding(start = 12.dp, top = 14.dp, end = 12.dp, bottom = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "${camera.name}\n${camera.address}",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = camera.displayName,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                    ),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = if (camera.customName != null) "${camera.name} · ${camera.address}" else camera.address,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
                                 if (isDefault) {
-                                        Text(
-                                            text = L10n.t("✓ 启动时默认连接", "✓ Default at startup"),
+                                    Text(
+                                        text = L10n.t("✓ 启动时默认连接", "✓ Default at startup"),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -144,6 +158,12 @@ fun SavedCameraDialog(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceEvenly
                                 ) {
+                                    TextButton(onClick = {
+                                        pendingRename = camera
+                                        renameInput = camera.customName ?: ""
+                                    }) {
+                                        Text(L10n.t("重命名", "Rename"))
+                                    }
                                     if (cameras.size > 1) {
                                         TextButton(onClick = { onSetDefault(camera) }) {
                                             Text(if (isDefault) L10n.t("取消默认", "Unset Default") else L10n.t("设为默认", "Set Default"))
@@ -162,9 +182,10 @@ fun SavedCameraDialog(
         confirmButton = {
             TextButton(onClick = {
                 pendingDelete = null
+                pendingRename = null
                 onDismiss()
             }) {
-                Text(L10n.t("取消", "Cancel"))
+                Text(L10n.t("关闭", "Close"))
             }
         }
     )
@@ -190,6 +211,44 @@ fun SavedCameraDialog(
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
+                    Text(L10n.t("取消", "Cancel"))
+                }
+            }
+        )
+    }
+    pendingRename?.let { camera ->
+        AlertDialog(
+            onDismissRequest = { pendingRename = null },
+            title = { Text(L10n.t("自定义相机名称", "Rename Camera")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = L10n.t(
+                            "为 ${camera.name} 设置别名（如「主力机 Z8」），方便在多台机身间快速识别与切换：",
+                            "Set an alias for ${camera.name} (e.g. \"Main Z8\") to easily distinguish multiple bodies:"
+                        ),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = renameInput,
+                        onValueChange = { renameInput = it },
+                        label = { Text(L10n.t("相机别名/备注", "Camera Alias")) },
+                        placeholder = { Text(camera.name) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRename(camera, renameInput.takeIf { it.isNotBlank() })
+                    pendingRename = null
+                }) {
+                    Text(L10n.t("保存", "Save"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRename = null }) {
                     Text(L10n.t("取消", "Cancel"))
                 }
             }
