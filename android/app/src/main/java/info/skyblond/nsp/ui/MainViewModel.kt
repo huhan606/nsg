@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import info.skyblond.nsp.data.DiscoveredCamera
 import info.skyblond.nsp.data.PairedCamera
+import info.skyblond.nsp.data.SettingsRepository
 import info.skyblond.nsp.service.CameraConnectionService
 import info.skyblond.nsp.service.GpsState
 import info.skyblond.nsp.service.ConnectionState
@@ -181,6 +182,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onGpsIntervalChanged(seconds: Int) {
         service?.applyGpsInterval(seconds)
+    }
+
+    fun onRefreshSavedCameras(context: Context) {
+        service?.refreshSavedCameras()
+        val repo = SettingsRepository(context)
+        _uiState.update { it.copy(savedCameras = repo.loadSavedCameras()) }
     }
 
     data class UiState(

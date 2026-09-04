@@ -2,6 +2,9 @@ package info.skyblond.nsp.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import info.skyblond.nsp.ui.L10n
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Lightweight persistence for paired cameras. Stores a JSON string per camera.
@@ -167,6 +170,95 @@ class SettingsRepository(context: Context) {
         prefs.edit()
             .putStringSet(KEY_CAMERAS, cameras.map { it.toJson() }.toSet())
             .apply()
+    }
+
+    data class ImportResult(
+        val success: Boolean,
+        val cameraCount: Int,
+        val message: String
+    )
+
+    /**
+     * Export all paired cameras and settings into a portable JSON string.
+     */
+    fun exportConfigJson(): String {
+        val root = JSONObject().apply {
+            put("version", 1)
+            put("exportTimestamp", System.currentTimeMillis())
+            val camArray = JSONArray()
+            loadSavedCameras().forEach { cam ->
+                camArray.put(JSONObject(cam.toJson()))
+            }
+            put("cameras", camArray)
+            defaultConnectCameraName()?.let { put("defaultCamera", it) }
+            spoofControllerName()?.let { put("spoofControllerName", it) }
+            fixedDeviceIdRaw()?.let { put("fixedDeviceId", it) }
+            put("gpsIntervalSeconds", gpsIntervalSeconds())
+            put("hapticFeedbackEnabled", isHapticFeedbackEnabled())
+            put("trackLoggingEnabled", isTrackLoggingEnabled())
+        }
+        return root.toString(2)
+    }
+
+    /**
+     * Import cameras and settings from a JSON string, merging with existing entries.
+     */
+    fun importConfigJson(jsonStr: String): ImportResult {
+        return try {
+            val root = JSONObject(jsonStr)
+            val camArray = root.optJSONArray("cameras") ?: JSONArray()
+            val importedCameras = mutableListOf<PairedCamera>()
+            for (i in 0 until camArray.length()) {
+                val camObj = camArray.getJSONObject(i)
+                val cam = PairedCamera.fromJson(camObj.toString())
+                if (cam != null && cam.name.isNotBlank()) {
+                    importedCameras.add(cam)
+                }
+            }
+            if (importedCameras.isEmpty()) {
+                return ImportResult(false, 0, L10n.t("配置中未找到有效的相机数据", "No valid camera data found in config"))
+            }
+
+            // Merge with existing cameras (by name)
+            val current = loadSavedCameras().toMutableList()
+            for (incoming in importedCameras) {
+                val existingIndex = current.indexOfFirst { it.name == incoming.name }
+                if (existingIndex != -1) {
+                    val existing = current[existingIndex]
+                    current[existingIndex] = incoming.copy(
+                        customName = incoming.customName ?: existing.customName
+                    )
+                } else {
+                    current.add(incoming)
+                }
+            }
+            store(current)
+
+            // Optional settings import if present
+            if (root.has("defaultCamera") && !root.isNull("defaultCamera")) {
+                val def = root.getString("defaultCamera")
+                if (current.any { it.name == def }) {
+                    setDefaultConnectCameraName(def)
+                }
+            }
+            if (root.has("spoofControllerName") && !root.isNull("spoofControllerName")) {
+                setSpoofControllerName(root.getString("spoofControllerName"))
+            }
+            if (root.has("fixedDeviceId") && !root.isNull("fixedDeviceId")) {
+                setFixedDeviceId(root.getString("fixedDeviceId"))
+            }
+            if (root.has("gpsIntervalSeconds")) {
+                setGpsIntervalSeconds(root.getInt("gpsIntervalSeconds"))
+            }
+
+            ImportResult(
+                success = true,
+                cameraCount = importedCameras.size,
+                message = L10n.t("成功导入 ${importedCameras.size} 台相机配置", "Successfully imported ${importedCameras.size} camera(s)")
+            )
+        } catch (e: Exception) {
+            ImportResult(false, 0, L10n.t("配置文件解析失败: ${e.message}", "Failed to parse config: ${e.message}"))
+        }
     }
 
     companion object {
