@@ -57,3 +57,12 @@ The value stored in the photo's EXIF tag is correct in both cases (verified with
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for how to build the project, report bugs, and submit changes. Contributors are listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
+## Disclaimer & Legal Notice / 免责与法律声明
+
+This project (`nsg` / `GPS Assistant`) is an independent open-source utility developed for photography enthusiasts. It is **NOT** affiliated with, sponsored by, authorized by, or endorsed by Nikon Corporation.
+
+- **Trademarks**: "Nikon", "SnapBridge", and camera model designations are registered trademarks of Nikon Corporation. Their use here is strictly for identification of compatible hardware under nominative fair use doctrine.
+- **License**: Distributed under the GNU AGPL-3.0 License. Provided "as-is" without warranty of any kind.
+- **Privacy**: Does not collect, transmit, or store personal telemetry or location data to any external server.
+

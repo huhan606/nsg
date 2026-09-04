@@ -92,6 +92,7 @@ import info.skyblond.nsp.service.ConnectionState
 import info.skyblond.nsp.service.GpxTrackLogger
 import info.skyblond.nsp.ui.BluetoothEnableGate
 import info.skyblond.nsp.ui.ConfigMigrationDialog
+import info.skyblond.nsp.ui.DisclaimerDialog
 import info.skyblond.nsp.ui.DiscoveredCameraDialog
 import info.skyblond.nsp.ui.L10n
 import info.skyblond.nsp.ui.MainViewModel
@@ -182,6 +183,7 @@ private fun MainScreen(
     var showAdvancedSettingsPage by remember { mutableStateOf(false) }
     var showConfigMigrationDialog by remember { mutableStateOf(false) }
     var showTrackMapDialog by remember { mutableStateOf(false) }
+    var showDisclaimerDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(openTrackMapTrigger) {
         if (openTrackMapTrigger) {
@@ -316,6 +318,7 @@ private fun MainScreen(
             onBatteryClick = onBatteryClick,
             onOpenAppSettings = onOpenAppSettings,
             onOpenNotificationSettings = onOpenNotificationSettings,
+            onOpenDisclaimer = { showDisclaimerDialog = true },
             uiState = uiState,
             onBack = { showAdvancedSettingsPage = false }
         )
@@ -347,7 +350,8 @@ private fun MainScreen(
                         HeaderBar(
                             onOpenTrackMap = { showTrackMapDialog = true },
                             onOpenConfigMigration = { showConfigMigrationDialog = true },
-                            onOpenAdvanced = { showAdvancedSettingsPage = true }
+                            onOpenAdvanced = { showAdvancedSettingsPage = true },
+                            onOpenDisclaimer = { showDisclaimerDialog = true }
                         )
                         StatusTelemetryCard(
                             uiState = uiState,
@@ -368,6 +372,17 @@ private fun MainScreen(
                             onQuickReconnectClick = { targetCam -> viewModel.onSavedCameraSelected(targetCam) },
                             onSendClick = { viewModel.onSendClicked() },
                             onDisconnectClick = { viewModel.onDisconnectClicked() }
+                        )
+
+                        // Subtle legal disclaimer link
+                        Text(
+                            text = L10n.t("⚖️ GPS Assistant · 开源免责声明", "⚖️ GPS Assistant · Legal & Disclaimer"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .clickable { showDisclaimerDialog = true }
+                                .padding(vertical = 4.dp)
                         )
                     }
                 }
@@ -421,16 +436,23 @@ private fun MainScreen(
             onDismiss = { showTrackMapDialog = false }
         )
     }
+
+    if (showDisclaimerDialog) {
+        DisclaimerDialog(
+            onDismiss = { showDisclaimerDialog = false }
+        )
+    }
 }
 
 /**
- * Top branding bar with Nikon logo accent and settings menu.
+ * Top branding bar with settings menu and legal disclaimer.
  */
 @Composable
 private fun HeaderBar(
     onOpenTrackMap: () -> Unit,
     onOpenConfigMigration: () -> Unit,
-    onOpenAdvanced: () -> Unit
+    onOpenAdvanced: () -> Unit,
+    onOpenDisclaimer: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -438,7 +460,7 @@ private fun HeaderBar(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Nikon Brand Indicator Accent
+        // Brand Indicator Accent
         Box(
             modifier = Modifier
                 .size(width = 4.dp, height = 24.dp)
@@ -448,7 +470,7 @@ private fun HeaderBar(
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = L10n.t("NIKON SMART GPS", "NIKON SMART GPS"),
+                text = L10n.t("GPS ASSISTANT", "GPS ASSISTANT"),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp
@@ -456,7 +478,7 @@ private fun HeaderBar(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = L10n.t("尼康微单蓝牙定位助手", "Nikon Z Smart GPS Provider"),
+                text = L10n.t("智能相机定位助手 (适用于尼康微单)", "Smart GPS Assistant for Nikon Cameras"),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -491,6 +513,13 @@ private fun HeaderBar(
                     onClick = {
                         menuOpen = false
                         onOpenAdvanced()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(L10n.t("⚖️ 开源免责声明", "⚖️ Legal & Disclaimer")) },
+                    onClick = {
+                        menuOpen = false
+                        onOpenDisclaimer()
                     }
                 )
             }
@@ -1267,6 +1296,7 @@ private fun AdvancedSettingsPage(
     onBatteryClick: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onOpenDisclaimer: () -> Unit,
     uiState: MainViewModel.UiState,
     onBack: () -> Unit
 ) {
@@ -1385,7 +1415,50 @@ private fun AdvancedSettingsPage(
                         .heightIn(min = 200.dp, max = 340.dp)
                 )
 
+                // Section 7: Open Source Disclaimer & Trademarks
+                DisclaimerSectionCard(
+                    onOpenDisclaimer = onOpenDisclaimer
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DisclaimerSectionCard(
+    onOpenDisclaimer: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = L10n.t("⚖️ 开源免责与商标说明", "⚖️ Legal & Trademarks"),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = L10n.t(
+                    "本软件为独立开源摄影工具，非商业性质，与株式会社尼康无官方隶属关系。相关相机品牌与型号标识仅用于设备兼容性客观说明（指示性合理使用）。",
+                    "This software is an independent open-source utility and is not affiliated with Nikon Corporation. References to camera marks are solely for compatibility identification under nominative fair use."
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = onOpenDisclaimer,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(L10n.t("⚖️ 查看完整中英文免责声明", "⚖️ View Full Bilingual Disclaimer"))
             }
         }
     }

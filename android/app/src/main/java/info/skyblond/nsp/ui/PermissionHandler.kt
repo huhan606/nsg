@@ -150,8 +150,8 @@ private fun PermissionRationale(
     ) {
         Text(
             text = L10n.t(
-                "本应用需要蓝牙和定位权限，用于扫描并连接尼康相机。",
-                "This app needs Bluetooth and location permissions to scan for and connect to your Nikon camera."
+                "本应用需要蓝牙和定位权限，用于扫描并连接相机并提供高精度定位服务。",
+                "This app needs Bluetooth and location permissions to scan for, connect to your camera, and provide GPS synchronization."
             ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center

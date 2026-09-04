@@ -200,7 +200,7 @@ fun TrackMapDialog(
                         val last = points.last()
                         OutlinedButton(
                             onClick = {
-                                val uri = Uri.parse("geo:${last.latitude},${last.longitude}?q=${last.latitude},${last.longitude}(Nikon Photo)")
+                                val uri = Uri.parse("geo:${last.latitude},${last.longitude}?q=${last.latitude},${last.longitude}(Photo Location)")
                                 val mapIntent = Intent(Intent.ACTION_VIEW, uri)
                                 context.startActivity(Intent.createChooser(mapIntent, L10n.t("在地图中查看", "Open in Maps")))
                             },
