@@ -90,12 +90,14 @@ import info.skyblond.nsp.data.SettingsRepository
 import info.skyblond.nsp.service.ConnectionState
 import info.skyblond.nsp.service.GpxTrackLogger
 import info.skyblond.nsp.ui.BluetoothEnableGate
+import info.skyblond.nsp.ui.ConfigMigrationDialog
 import info.skyblond.nsp.ui.DiscoveredCameraDialog
 import info.skyblond.nsp.ui.L10n
 import info.skyblond.nsp.ui.MainViewModel
 import info.skyblond.nsp.ui.PermissionHandler
 import info.skyblond.nsp.ui.RequiredPermissions
 import info.skyblond.nsp.ui.SavedCameraDialog
+import info.skyblond.nsp.ui.TrackMapDialog
 import info.skyblond.nsp.ui.theme.NikonSmartGPSTheme
 import info.skyblond.nsp.ui.theme.NikonYellow
 import info.skyblond.nsp.ui.theme.StatusBusy
@@ -152,6 +154,8 @@ private fun MainScreen(viewModel: MainViewModel) {
     var isHapticEnabled by remember { mutableStateOf(settingsRepo.isHapticFeedbackEnabled()) }
     var isTrackLoggingEnabled by remember { mutableStateOf(settingsRepo.isTrackLoggingEnabled()) }
     var showAdvancedSettingsPage by remember { mutableStateOf(false) }
+    var showConfigMigrationDialog by remember { mutableStateOf(false) }
+    var showTrackMapDialog by remember { mutableStateOf(false) }
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     val batteryExempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
 
@@ -256,62 +260,65 @@ private fun MainScreen(viewModel: MainViewModel) {
             isTrackLoggingEnabled = isTrackLoggingEnabled,
             onTrackLoggingEnabledChange = onTrackLoggingEnabledChange,
             onExportGpx = onExportGpx,
+            onOpenTrackMap = { showTrackMapDialog = true },
+            onOpenConfigMigration = { showConfigMigrationDialog = true },
             batteryExempt = batteryExempt,
             onBatteryClick = onBatteryClick,
             onOpenAppSettings = onOpenAppSettings,
             uiState = uiState,
             onBack = { showAdvancedSettingsPage = false }
         )
-        return
-    }
-
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            val horizontalPadding = if (maxWidth < 360.dp) 10.dp else 16.dp
-
-            Box(
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = horizontalPadding, vertical = 10.dp),
-                contentAlignment = Alignment.TopCenter
+                    .padding(innerPadding)
             ) {
-                Column(
+                val horizontalPadding = if (maxWidth < 360.dp) 10.dp else 16.dp
+
+                Box(
                     modifier = Modifier
-                        .widthIn(max = 520.dp)
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .padding(horizontal = horizontalPadding, vertical = 10.dp),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    HeaderBar(
-                        onOpenAdvanced = { showAdvancedSettingsPage = true }
-                    )
-                    StatusTelemetryCard(
-                        uiState = uiState,
-                        onSwitchCamera = { viewModel.onSavedCameraSelected(it) },
-                        onCopyCoords = { coords ->
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("GPS", coords))
-                            Toast.makeText(context, L10n.t("已复制坐标", "Coordinates copied"), Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                    ActionControlGrid(
-                        uiState = uiState,
-                        pairingButtonsEnabled = pairingButtonsEnabled,
-                        connected = connected,
-                        connectionInProgress = connectionInProgress,
-                        onPairClick = { viewModel.onPairClicked() },
-                        onConnectClick = { viewModel.onConnectClicked() },
-                        onQuickReconnectClick = { targetCam -> viewModel.onSavedCameraSelected(targetCam) },
-                        onSendClick = { viewModel.onSendClicked() },
-                        onDisconnectClick = { viewModel.onDisconnectClicked() }
-                    )
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 520.dp)
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        HeaderBar(
+                            onOpenTrackMap = { showTrackMapDialog = true },
+                            onOpenConfigMigration = { showConfigMigrationDialog = true },
+                            onOpenAdvanced = { showAdvancedSettingsPage = true }
+                        )
+                        StatusTelemetryCard(
+                            uiState = uiState,
+                            onSwitchCamera = { viewModel.onSavedCameraSelected(it) },
+                            onCopyCoords = { coords ->
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("GPS", coords))
+                                Toast.makeText(context, L10n.t("已复制坐标", "Coordinates copied"), Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        ActionControlGrid(
+                            uiState = uiState,
+                            pairingButtonsEnabled = pairingButtonsEnabled,
+                            connected = connected,
+                            connectionInProgress = connectionInProgress,
+                            onPairClick = { viewModel.onPairClicked() },
+                            onConnectClick = { viewModel.onConnectClicked() },
+                            onQuickReconnectClick = { targetCam -> viewModel.onSavedCameraSelected(targetCam) },
+                            onSendClick = { viewModel.onSendClicked() },
+                            onDisconnectClick = { viewModel.onDisconnectClicked() }
+                        )
+                    }
                 }
             }
         }
@@ -337,6 +344,32 @@ private fun MainScreen(viewModel: MainViewModel) {
             onDismiss = { viewModel.onDismissSavedDialog() }
         )
     }
+
+    if (showConfigMigrationDialog) {
+        ConfigMigrationDialog(
+            savedCameras = uiState.savedCameras,
+            exportJson = settingsRepo.exportConfigJson(),
+            onImportConfig = { json ->
+                val result = settingsRepo.importConfigJson(json)
+                if (result.success) {
+                    viewModel.onRefreshSavedCameras(context)
+                }
+                result
+            },
+            onDismiss = { showConfigMigrationDialog = false }
+        )
+    }
+
+    if (showTrackMapDialog) {
+        TrackMapDialog(
+            onExportGpx = onExportGpx,
+            onClearTrack = {
+                GpxTrackLogger.clear()
+                Toast.makeText(context, L10n.t("已清空航迹记录", "Track points cleared"), Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showTrackMapDialog = false }
+        )
+    }
 }
 
 /**
@@ -344,6 +377,8 @@ private fun MainScreen(viewModel: MainViewModel) {
  */
 @Composable
 private fun HeaderBar(
+    onOpenTrackMap: () -> Unit,
+    onOpenConfigMigration: () -> Unit,
     onOpenAdvanced: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -387,7 +422,21 @@ private fun HeaderBar(
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text(L10n.t("高级与省电设置", "Advanced & Power Settings")) },
+                    text = { Text(L10n.t("🗺️ 拍摄足迹地图", "🗺️ Photo Footprint Map")) },
+                    onClick = {
+                        menuOpen = false
+                        onOpenTrackMap()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(L10n.t("🔄 相机配置备份与迁移", "🔄 Camera Config Migration")) },
+                    onClick = {
+                        menuOpen = false
+                        onOpenConfigMigration()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(L10n.t("⚙️ 高级与省电设置", "⚙️ Advanced & Power Settings")) },
                     onClick = {
                         menuOpen = false
                         onOpenAdvanced()
@@ -1121,6 +1170,8 @@ private fun AdvancedSettingsPage(
     isTrackLoggingEnabled: Boolean,
     onTrackLoggingEnabledChange: (Boolean) -> Unit,
     onExportGpx: () -> Unit,
+    onOpenTrackMap: () -> Unit,
+    onOpenConfigMigration: () -> Unit,
     batteryExempt: Boolean,
     onBatteryClick: () -> Unit,
     onOpenAppSettings: () -> Unit,
@@ -1186,10 +1237,16 @@ private fun AdvancedSettingsPage(
                     onHapticEnabledChange = onHapticEnabledChange,
                     isTrackLoggingEnabled = isTrackLoggingEnabled,
                     onTrackLoggingEnabledChange = onTrackLoggingEnabledChange,
-                    onExportGpx = onExportGpx
+                    onExportGpx = onExportGpx,
+                    onOpenTrackMap = onOpenTrackMap
                 )
 
-                // Section 3: Battery Optimization Settings
+                // Section 3: Camera Config Clone & Migration
+                ConfigMigrationSectionCard(
+                    onOpenConfigMigration = onOpenConfigMigration
+                )
+
+                // Section 4: Battery Optimization Settings
                 BatteryExemptionCard(
                     batteryExempt = batteryExempt,
                     onBatteryClick = onBatteryClick,
@@ -1198,7 +1255,7 @@ private fun AdvancedSettingsPage(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-                // Section 4: SnapBridge Compatibility & Identity
+                // Section 5: SnapBridge Compatibility & Identity
                 Text(
                     text = L10n.t("相机标识与 SnapBridge 兼容", "Camera Identity & SnapBridge"),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -1227,7 +1284,7 @@ private fun AdvancedSettingsPage(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-                // Section 5: Real-time Communication Logs
+                // Section 6: Real-time Communication Logs
                 EventsTerminalCard(
                     uiState = uiState,
                     modifier = Modifier
@@ -1242,12 +1299,54 @@ private fun AdvancedSettingsPage(
 }
 
 @Composable
+private fun ConfigMigrationSectionCard(
+    onOpenConfigMigration: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column {
+                Text(
+                    text = L10n.t("相机配置克隆与跨机迁移", "Camera Config Clone & Migration"),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = L10n.t(
+                        "将已配对相机的密钥与别名导出为 JSON 备份，可在另一台手机上直接导入，无需重新在相机端配对。",
+                        "Export camera pairing keys & aliases as JSON to clone to another phone without repairing on camera."
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Button(
+                onClick = onOpenConfigMigration,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(L10n.t("🔄 打开备份与迁移工具", "🔄 Open Backup & Migration Tool"))
+            }
+        }
+    }
+}
+
+@Composable
 private fun PhotographyToolsSection(
     isHapticEnabled: Boolean,
     onHapticEnabledChange: (Boolean) -> Unit,
     isTrackLoggingEnabled: Boolean,
     onTrackLoggingEnabledChange: (Boolean) -> Unit,
-    onExportGpx: () -> Unit
+    onExportGpx: () -> Unit,
+    onOpenTrackMap: () -> Unit
 ) {
     ElevatedCard(
         shape = RoundedCornerShape(16.dp),
@@ -1322,16 +1421,28 @@ private fun PhotographyToolsSection(
                 )
             }
 
-            // Export GPX button
+            // Map preview and Export GPX buttons
             val pointCount = remember { GpxTrackLogger.pointCount() }
-            OutlinedButton(
-                onClick = onExportGpx,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = L10n.t("导出 GPX 航迹文件", "Export GPX Track") + " ($pointCount " + L10n.t("个航迹点", "pts") + ")"
-                )
+                OutlinedButton(
+                    onClick = onOpenTrackMap,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(text = L10n.t("🗺️ 轨迹预览", "🗺️ View Route"))
+                }
+                OutlinedButton(
+                    onClick = onExportGpx,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = L10n.t("📤 导出 GPX", "📤 Export") + " ($pointCount)"
+                    )
+                }
             }
         }
     }

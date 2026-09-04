@@ -74,6 +74,40 @@ object GpxTrackLogger {
 
     fun pointCount(): Int = points.size
 
+    fun getPoints(): List<TrackPoint> = synchronized(points) { points.toList() }
+
+    data class TrackSummary(
+        val pointCount: Int,
+        val totalDistanceMeters: Double,
+        val minAltitude: Double,
+        val maxAltitude: Double,
+        val startTimeEpochMs: Long,
+        val endTimeEpochMs: Long
+    )
+
+    fun getTrackSummary(): TrackSummary? {
+        val pts = getPoints()
+        if (pts.isEmpty()) return null
+        var totalDist = 0.0
+        var minEle = pts.first().altitude
+        var maxEle = pts.first().altitude
+        for (i in 0 until pts.size - 1) {
+            val p1 = pts[i]
+            val p2 = pts[i + 1]
+            totalDist += haversineMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
+            if (p2.altitude < minEle) minEle = p2.altitude
+            if (p2.altitude > maxEle) maxEle = p2.altitude
+        }
+        return TrackSummary(
+            pointCount = pts.size,
+            totalDistanceMeters = totalDist,
+            minAltitude = minEle,
+            maxAltitude = maxEle,
+            startTimeEpochMs = pts.first().timeEpochMs,
+            endTimeEpochMs = pts.last().timeEpochMs
+        )
+    }
+
     /**
      * Calculates great-circle distance between two coordinates in meters.
      */

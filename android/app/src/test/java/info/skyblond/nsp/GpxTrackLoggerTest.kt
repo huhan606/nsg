@@ -52,4 +52,22 @@ class GpxTrackLoggerTest {
         assertTrue(added3)
         assertEquals(2, GpxTrackLogger.pointCount())
     }
+
+    @Test
+    fun trackSummaryCalculatesStatsCorrectly() {
+        assertNull(GpxTrackLogger.getTrackSummary())
+
+        GpxTrackLogger.addPoint(35.6800, 139.6900, 30.0, 1000L)
+        GpxTrackLogger.addPoint(35.6850, 139.6900, 80.0, 2000L)
+        GpxTrackLogger.addPoint(35.6900, 139.6900, 50.0, 3000L)
+
+        val summary = GpxTrackLogger.getTrackSummary()
+        assertNotNull(summary)
+        assertEquals(3, summary!!.pointCount)
+        assertEquals(30.0, summary.minAltitude, 0.001)
+        assertEquals(80.0, summary.maxAltitude, 0.001)
+        assertEquals(1000L, summary.startTimeEpochMs)
+        assertEquals(3000L, summary.endTimeEpochMs)
+        assertTrue(summary.totalDistanceMeters > 1000.0) // ~1.1km difference in latitude
+    }
 }
