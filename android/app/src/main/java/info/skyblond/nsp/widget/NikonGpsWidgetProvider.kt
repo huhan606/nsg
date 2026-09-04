@@ -91,10 +91,13 @@ class NikonGpsWidgetProvider : AppWidgetProvider() {
         fun updateAllWidgets(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context) ?: return
             val thisWidget = ComponentName(context, NikonGpsWidgetProvider::class.java)
-            val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget) ?: return
-            for (widgetId in allWidgetIds) {
-                updateAppWidget(context, appWidgetManager, widgetId)
+            val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
+            if (allWidgetIds != null) {
+                for (widgetId in allWidgetIds) {
+                    updateAppWidget(context, appWidgetManager, widgetId)
+                }
             }
+            NikonGpsDashboardWidgetProvider.updateAllWidgets(context)
         }
 
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {

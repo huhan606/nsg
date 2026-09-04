@@ -113,10 +113,16 @@ import kotlin.math.absoluteValue
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_OPEN_TRACK_MAP = "info.skyblond.nsp.OPEN_TRACK_MAP"
+    }
+
     private val viewModel: MainViewModel by viewModels()
+    private val openTrackMapState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleTrackMapIntent(intent)
         enableEdgeToEdge()
         setContent {
             NikonSmartGPSTheme {
@@ -124,10 +130,25 @@ class MainActivity : ComponentActivity() {
                     onPermissionsGranted = { viewModel.startAndBindService() }
                 ) {
                     BluetoothEnableGate {
-                        MainScreen(viewModel = viewModel)
+                        MainScreen(
+                            viewModel = viewModel,
+                            openTrackMapTrigger = openTrackMapState.value,
+                            onTrackMapTriggerConsumed = { openTrackMapState.value = false }
+                        )
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTrackMapIntent(intent)
+    }
+
+    private fun handleTrackMapIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_TRACK_MAP, false) == true) {
+            openTrackMapState.value = true
         }
     }
 
@@ -145,7 +166,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainScreen(viewModel: MainViewModel) {
+private fun MainScreen(
+    viewModel: MainViewModel,
+    openTrackMapTrigger: Boolean = false,
+    onTrackMapTriggerConsumed: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val settingsRepo = remember { SettingsRepository(context) }
@@ -157,6 +182,13 @@ private fun MainScreen(viewModel: MainViewModel) {
     var showAdvancedSettingsPage by remember { mutableStateOf(false) }
     var showConfigMigrationDialog by remember { mutableStateOf(false) }
     var showTrackMapDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(openTrackMapTrigger) {
+        if (openTrackMapTrigger) {
+            showTrackMapDialog = true
+            onTrackMapTriggerConsumed()
+        }
+    }
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     val batteryExempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
 

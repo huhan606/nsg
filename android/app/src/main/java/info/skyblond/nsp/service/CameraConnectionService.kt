@@ -160,6 +160,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         super.onDestroy()
         isRunning = false
         currentConnectionState = ConnectionState.Idle
+        activeCameraDisplayName = null
+        lastFormattedLocation = null
+        lastSatelliteInfo = null
         pairingSession.dispose()
         keepAliveJob?.cancel()
         stopLocationUpdates()
@@ -204,6 +207,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
     override fun onSessionDisconnected() {
         activeCameraDisplayName = null
         lastFormattedLocation = null
+        lastSatelliteInfo = null
         stopKeepAlive()
         stopLocationUpdates()
         try {
@@ -613,9 +617,11 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         val s = _gpsState.value
         val sat = s.satellites
         val total = s.totalSatellites
-        return if (s.hasFix && sat != null && sat > 0) {
-            if (total != null && total > 0) "🛰️ $sat/$total" else "🛰️ $sat"
+        val formatted = if (s.hasFix && sat != null && sat > 0) {
+            if (total != null && total > 0) "$sat/$total" else "$sat"
         } else null
+        lastSatelliteInfo = formatted
+        return formatted?.let { "🛰️ $it" }
     }
 
     private fun updateNotificationCapsule() {
@@ -650,6 +656,8 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         var activeCameraDisplayName: String? = null
             internal set
         var lastFormattedLocation: String? = null
+            internal set
+        var lastSatelliteInfo: String? = null
             internal set
 
         private const val GPS_UPDATE_INTERVAL_MS = 5_000L

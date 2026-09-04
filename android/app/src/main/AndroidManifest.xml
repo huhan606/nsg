@@ -70,6 +70,7 @@
 
         <receiver
             android:name=".widget.NikonGpsWidgetProvider"
+            android:label="@string/widget_compact_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -79,6 +80,21 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.NikonGpsDashboardWidgetProvider"
+            android:label="@string/widget_4x4_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="info.skyblond.nsp.widget.4x4.TOGGLE_CONNECT" />
+                <action android:name="info.skyblond.nsp.widget.4x4.SEND_GEO" />
+                <action android:name="info.skyblond.nsp.widget.4x4.UPDATE_ALL" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_4x4" />
         </receiver>
 
         <provider
