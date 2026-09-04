@@ -334,6 +334,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             GpxTrackLogger.addPoint(location)
         }
         maybeSendGeo(location)
+        updateNotificationCapsule()
         try {
             info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
         } catch (_: Exception) {}
@@ -538,7 +539,14 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
      */
     private fun startForegroundCompat() {
         val canSendGeo = state.value is ConnectionState.Ready || state.value is ConnectionState.Busy
-        val notification = NotificationHelper.build(this, state.value.label, canSendGeo)
+        val notification = NotificationHelper.build(
+            this,
+            state.value.label,
+            canSendGeo = canSendGeo,
+            cameraName = activeCameraDisplayName,
+            telemetryText = lastFormattedLocation,
+            satelliteText = formatSatelliteInfo()
+        )
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             startForeground(NotificationHelper.NOTIFICATION_ID, notification)
             return
@@ -579,8 +587,7 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         val oldState = _state.value
         _state.value = newState
         currentConnectionState = newState
-        val canSendGeo = newState is ConnectionState.Ready || newState is ConnectionState.Busy
-        NotificationHelper.update(this, newState.label, canSendGeo)
+        updateNotificationCapsule()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
@@ -600,6 +607,27 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         try {
             info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
         } catch (_: Exception) {}
+    }
+
+    private fun formatSatelliteInfo(): String? {
+        val s = _gpsState.value
+        val sat = s.satellites
+        val total = s.totalSatellites
+        return if (s.hasFix && sat != null && sat > 0) {
+            if (total != null && total > 0) "🛰️ $sat/$total" else "🛰️ $sat"
+        } else null
+    }
+
+    private fun updateNotificationCapsule() {
+        val canSendGeo = state.value is ConnectionState.Ready || state.value is ConnectionState.Busy
+        NotificationHelper.update(
+            this,
+            state.value.label,
+            canSendGeo = canSendGeo,
+            cameraName = activeCameraDisplayName,
+            telemetryText = lastFormattedLocation,
+            satelliteText = formatSatelliteInfo()
+        )
     }
 
     private fun logEvent(message: String) {
