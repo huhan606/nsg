@@ -27,20 +27,28 @@ Requirements:
 - Android SDK with platform 36 (or simply use Android Studio)
 - Gradle is provided by the wrapper (`android/gradlew`)
 
-Build:
+Build Debug APK:
 
 ```sh
 cd android
 ./gradlew :app:assembleDebug
 ```
 
+Build Release APK:
+
+```sh
+cd android
+./gradlew :app:assembleRelease
+```
+
 Run unit tests:
 
 ```sh
+cd android
 ./gradlew :app:testDebugUnitTest
 ```
 
-The debug APK is produced at `android/app/build/outputs/apk/debug/`. You can also open the `android/` folder in Android Studio and run the app on a device.
+The APKs are produced at `android/app/build/outputs/apk/debug/` and `android/app/build/outputs/apk/release/`. You can also open the `android/` folder in Android Studio and run the app on a device.
 
 ### ESP32 firmware
 
