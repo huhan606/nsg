@@ -43,9 +43,16 @@ class SettingsRepository(context: Context) {
         val current = loadSavedCameras().toMutableList()
         // The camera name is the stable identifier; the BLE address is random and changes
         // between sessions, so replace any existing entry with the same name.
+        val existingIndex = current.indexOfFirst { it.name == camera.name }
+        val toSave = if (existingIndex != -1 && camera.customName == null) {
+            // Keep existing custom alias if the incoming camera object didn't specify one
+            camera.copy(customName = current[existingIndex].customName)
+        } else {
+            camera
+        }
         current.removeAll { it.name == camera.name }
-        current.add(camera)
-        setLastUsedCamera(camera.name)
+        current.add(toSave)
+        setLastUsedCamera(toSave.name)
         store(current)
     }
 

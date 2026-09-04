@@ -49,4 +49,38 @@ class PairedCameraTest {
         )
         assertEquals("Z 8_1234567", cam.displayName)
     }
+
+
+    @Test
+    fun preserveExistingCustomNameWhenIncomingIsNull() {
+        val existing = PairedCamera(
+            name = "NIKON Z 7_2",
+            address = "11:22:33:44:55:66",
+            addressType = 2,
+            device = 0x12345678L,
+            nonce = 0x87654321L,
+            controllerName = "Android_Test",
+            customName = "Studio Camera"
+        )
+        // Simulated onBonded or reconnect incoming object without customName
+        val incoming = PairedCamera(
+            name = "NIKON Z 7_2",
+            address = "66:55:44:33:22:11", // updated BLE address
+            addressType = 2,
+            device = 0x12345678L,
+            nonce = 0x99999999L,
+            controllerName = "Android_Test"
+        )
+        assertNull(incoming.customName)
+
+        val merged = if (incoming.customName == null) {
+            incoming.copy(customName = existing.customName)
+        } else {
+            incoming
+        }
+
+        assertEquals("Studio Camera", merged.customName)
+        assertEquals("Studio Camera", merged.displayName)
+        assertEquals("66:55:44:33:22:11", merged.address)
+    }
 }

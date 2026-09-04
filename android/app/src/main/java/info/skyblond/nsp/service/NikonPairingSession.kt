@@ -274,6 +274,9 @@ class NikonPairingSession(
         bleManager?.writeGeo(payload)
     }
 
+    val currentDeviceName: String?
+        get() = savedCamera?.name ?: currentDevice?.name
+
     fun selectDiscoveredCamera(camera: DiscoveredCamera) {
         scope.launch {
             Log.d(TAG, "selectDiscoveredCamera: ${camera.name} [${camera.address}]")
@@ -1019,17 +1022,21 @@ class NikonPairingSession(
         isAwaitingBond = false
         Log.d(TAG, "onBonded: mode=$pairingMode")
         if (currentDevice != null && currentStage1 != null) {
+            val devName = currentDevice?.name ?: "Nikon"
+            val existing = settings.loadSavedCameras().firstOrNull { it.name == devName }
             val camera = PairedCamera(
-                name = currentDevice?.name ?: "Nikon",
+                name = devName,
                 address = currentDevice?.address ?: return,
                 addressType = currentDevice?.type ?: BluetoothDevice.DEVICE_TYPE_UNKNOWN,
                 device = currentStage1?.device ?: return,
                 nonce = currentStage1?.nonce ?: return,
-                controllerName = controllerName
+                controllerName = controllerName,
+                customName = savedCamera?.customName ?: existing?.customName
             )
+            savedCamera = camera
             settings.saveCamera(camera)
             host.refreshSavedCameras()
-            Log.d(TAG, "Saved paired camera: ${camera.name} [${camera.address}]")
+            Log.d(TAG, "Saved paired camera: ${camera.name} (${camera.displayName}) [${camera.address}]")
         }
         pairingStep = 6
         host.updateState(ConnectionState.Ready)
@@ -1049,13 +1056,16 @@ class NikonPairingSession(
         }
         Log.d(TAG, "reconnectAfterBonding: ${device.address} using saved stage 1 data")
         pairingMode = PairingMode.RECONNECT
+        val devName = device.name ?: "Nikon"
+        val existing = settings.loadSavedCameras().firstOrNull { it.name == devName }
         val newCamera = PairedCamera(
-            name = device.name ?: "Nikon",
+            name = devName,
             address = device.address,
             addressType = device.type,
             device = stage1.device,
             nonce = stage1.nonce,
-            controllerName = controllerName
+            controllerName = controllerName,
+            customName = savedCamera?.customName ?: existing?.customName
         )
         savedCamera = newCamera
         settings.saveCamera(newCamera)
