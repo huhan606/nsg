@@ -190,11 +190,16 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
 
     fun selectDiscoveredCamera(camera: DiscoveredCamera) = pairingSession.selectDiscoveredCamera(camera)
 
-    fun connectToSavedCamera(camera: PairedCamera) = pairingSession.connectToSavedCamera(camera)
+    fun connectToSavedCamera(camera: PairedCamera) {
+        activeCameraDisplayName = camera.displayName
+        pairingSession.connectToSavedCamera(camera)
+    }
 
     fun startAutoExtract(camera: PairedCamera) = pairingSession.startAutoExtract(camera)
 
     fun disconnect() {
+        activeCameraDisplayName = null
+        lastFormattedLocation = null
         serviceScope.launch {
             pairingSession.disconnect()
             geoTimeoutJob?.cancel()
@@ -258,12 +263,23 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         }
     }
 
+    /** Rename a camera with a custom user-defined alias. */
+    fun renameCamera(camera: PairedCamera, newCustomName: String?) {
+        serviceScope.launch {
+            settingsRepository.renameCamera(camera, newCustomName)
+            refreshSavedCameras()
+            val effective = newCustomName?.trim()?.takeIf { it.isNotBlank() } ?: camera.name
+            logEvent(L10n.t("已将相机命名为 %s", "Camera renamed to %s").format(effective))
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Location / GPS
     // -------------------------------------------------------------------------
 
     private fun handleLocation(location: Location) {
         lastLocation = location
+        lastFormattedLocation = String.format(java.util.Locale.US, "GPS: %.4f, %.4f (±%.0fm)", location.latitude, location.longitude, location.accuracy)
         _gpsState.update {
             it.copy(
                 hasFix = true,
@@ -278,6 +294,9 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             GpxTrackLogger.addPoint(location)
         }
         maybeSendGeo(location)
+        try {
+            info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
+        } catch (_: Exception) {}
     }
 
     fun applyGpsInterval(seconds: Int) {
@@ -537,6 +556,10 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
         } else if ((oldState is ConnectionState.Ready || oldState is ConnectionState.Busy) && newState is ConnectionState.Idle) {
             HapticHelper.vibrateDisconnect(this)
         }
+
+        try {
+            info.skyblond.nsp.widget.NikonGpsWidgetProvider.updateAllWidgets(this)
+        } catch (_: Exception) {}
     }
 
     private fun logEvent(message: String) {
@@ -553,6 +576,10 @@ class CameraConnectionService : Service(), NikonPairingSession.Host {
             private set
         var currentConnectionState: ConnectionState = ConnectionState.Idle
             private set
+        var activeCameraDisplayName: String? = null
+            internal set
+        var lastFormattedLocation: String? = null
+            internal set
 
         private const val GPS_UPDATE_INTERVAL_MS = 5_000L
         private const val NETWORK_UPDATE_INTERVAL_MS = 15_000L
