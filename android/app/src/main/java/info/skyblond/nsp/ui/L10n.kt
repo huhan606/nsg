@@ -7,8 +7,8 @@ import java.util.Locale
  * Chinese locales show Chinese, everything else shows English. No manual switch.
  */
 object L10n {
-    val isChinese: Boolean =
-        Locale.getDefault().language.equals("zh", ignoreCase = true)
+    val isChinese: Boolean
+        get() = Locale.getDefault().language.equals("zh", ignoreCase = true)
 
     fun t(zh: String, en: String): String = if (isChinese) zh else en
 }

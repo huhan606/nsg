@@ -69,7 +69,7 @@ object NotificationHelper {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val effectiveCam = cameraName?.takeIf { it.isNotBlank() } ?: L10n.t("尼康相机", "Nikon Camera")
+        val effectiveCam = cameraName?.takeIf { it.isNotBlank() } ?: L10n.t("相机", "Camera")
         val capsuleTitle = "📷 $effectiveCam · $statusText"
 
         val bodyLine = buildString {

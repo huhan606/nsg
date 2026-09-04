@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPS 定位助手</string>
+    <string name="widget_compact_name">GPS 助手快捷胶囊</string>
+    <string name="widget_compact_desc">紧凑型小组件，支持一键连接/断开相机及查看定位状态</string>
+    <string name="widget_4x4_name">GPS 助手摄影仪表板 (4x4)</string>
+    <string name="widget_4x4_desc">专业级户外摄影大屏仪表板，包含卫星全景、经纬度、足迹打点及快捷操作</string>
+    <string name="tile_label">GPS 定位助手</string>
+    <string name="disclaimer_title">开源免责声明</string>
+</resources>

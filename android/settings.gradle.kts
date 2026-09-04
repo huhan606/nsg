@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Nikon Smart GPS"
+rootProject.name = "GPS Assistant"
 include(":app")
