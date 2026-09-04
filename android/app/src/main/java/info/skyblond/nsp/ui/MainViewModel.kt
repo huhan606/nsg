@@ -166,6 +166,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         service?.deleteCamera(camera)
     }
 
+    fun onRenameCamera(camera: PairedCamera, newCustomName: String?) {
+        service?.renameCamera(camera, newCustomName)
+    }
+
     fun onDismissDiscoveredDialog() {
         service?.stopScan()
         _uiState.update { it.copy(showDiscoveredDialog = false) }

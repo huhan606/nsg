@@ -256,6 +256,10 @@ private fun MainScreen(viewModel: MainViewModel) {
             isTrackLoggingEnabled = isTrackLoggingEnabled,
             onTrackLoggingEnabledChange = onTrackLoggingEnabledChange,
             onExportGpx = onExportGpx,
+            batteryExempt = batteryExempt,
+            onBatteryClick = onBatteryClick,
+            onOpenAppSettings = onOpenAppSettings,
+            uiState = uiState,
             onBack = { showAdvancedSettingsPage = false }
         )
         return
@@ -270,83 +274,22 @@ private fun MainScreen(viewModel: MainViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val isLandscape = maxWidth > maxHeight
-            val isTabletOrFoldable = maxWidth >= 600.dp
-            val isWideLayout = isTabletOrFoldable || (isLandscape && maxWidth >= 500.dp)
-            val horizontalPadding = if (maxWidth < 360.dp) 8.dp else 16.dp
+            val horizontalPadding = if (maxWidth < 360.dp) 10.dp else 16.dp
 
-            if (isWideLayout) {
-                // Wide / Tablet / Landscape 2-column layout
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = horizontalPadding, vertical = 10.dp),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .widthIn(max = 1040.dp)
-                            .fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Left Column: Controls & Telemetry Dashboard
-                        Column(
-                            modifier = Modifier
-                                .width(360.dp)
-                                .fillMaxHeight()
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            HeaderBar(
-                                connectionState = uiState.connectionState,
-                                onOpenAdvanced = { showAdvancedSettingsPage = true }
-                            )
-                            StatusTelemetryCard(
-                                uiState = uiState,
-                                onSwitchCamera = { viewModel.onSavedCameraSelected(it) },
-                                onCopyCoords = { coords ->
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("GPS", coords))
-                                    Toast.makeText(context, L10n.t("已复制坐标", "Coordinates copied"), Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                            ActionControlGrid(
-                                uiState = uiState,
-                                pairingButtonsEnabled = pairingButtonsEnabled,
-                                connected = connected,
-                                connectionInProgress = connectionInProgress,
-                                onPairClick = { viewModel.onPairClicked() },
-                                onConnectClick = { viewModel.onConnectClicked() },
-                                onSendClick = { viewModel.onSendClicked() },
-                                onDisconnectClick = { viewModel.onDisconnectClicked() }
-                            )
-                            BatteryExemptionCard(
-                                batteryExempt = batteryExempt,
-                                onBatteryClick = onBatteryClick,
-                                onOpenAppSettings = onOpenAppSettings
-                            )
-                        }
-
-                        // Right Column: Full-height Activity Logs
-                        EventsTerminalCard(
-                            uiState = uiState,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                        )
-                    }
-                }
-            } else {
-                // Portrait / Compact Phone single scrollable column
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = horizontalPadding, vertical = 10.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
                 Column(
                     modifier = Modifier
+                        .widthIn(max = 520.dp)
                         .fillMaxSize()
-                        .padding(horizontal = horizontalPadding, vertical = 10.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     HeaderBar(
-                        connectionState = uiState.connectionState,
                         onOpenAdvanced = { showAdvancedSettingsPage = true }
                     )
                     StatusTelemetryCard(
@@ -365,19 +308,9 @@ private fun MainScreen(viewModel: MainViewModel) {
                         connectionInProgress = connectionInProgress,
                         onPairClick = { viewModel.onPairClicked() },
                         onConnectClick = { viewModel.onConnectClicked() },
+                        onQuickReconnectClick = { targetCam -> viewModel.onSavedCameraSelected(targetCam) },
                         onSendClick = { viewModel.onSendClicked() },
                         onDisconnectClick = { viewModel.onDisconnectClicked() }
-                    )
-                    BatteryExemptionCard(
-                        batteryExempt = batteryExempt,
-                        onBatteryClick = onBatteryClick,
-                        onOpenAppSettings = onOpenAppSettings
-                    )
-                    EventsTerminalCard(
-                        uiState = uiState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 180.dp, max = 340.dp)
                     )
                 }
             }
@@ -399,6 +332,7 @@ private fun MainScreen(viewModel: MainViewModel) {
             onAutoExtract = { viewModel.onAutoExtractClicked(it) },
             onSetDefault = { viewModel.onSetDefaultCamera(it) },
             onDelete = { viewModel.onDeleteCamera(it) },
+            onRename = { camera, newName -> viewModel.onRenameCamera(camera, newName) },
             defaultCameraName = uiState.defaultCameraName,
             onDismiss = { viewModel.onDismissSavedDialog() }
         )
@@ -406,11 +340,10 @@ private fun MainScreen(viewModel: MainViewModel) {
 }
 
 /**
- * Top branding bar with Nikon logo accent, live status chip, and settings menu.
+ * Top branding bar with Nikon logo accent and settings menu.
  */
 @Composable
 private fun HeaderBar(
-    connectionState: ConnectionState,
     onOpenAdvanced: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -442,9 +375,6 @@ private fun HeaderBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        // Connection Status Chip
-        StatusIndicatorChip(connectionState = connectionState)
 
         // Overflow Menu
         Box {
@@ -539,45 +469,6 @@ private fun BreathingStatusIndicator(
     }
 }
 
-@Composable
-private fun StatusIndicatorChip(connectionState: ConnectionState) {
-    val (statusColor, statusText) = when (connectionState) {
-        is ConnectionState.Ready -> StatusReady to L10n.t("就绪", "Ready")
-        is ConnectionState.Busy -> StatusBusy to L10n.t("忙碌", "Busy")
-        is ConnectionState.Scanning -> StatusScanning to L10n.t("扫描中", "Scanning")
-        is ConnectionState.Connecting -> StatusScanning to L10n.t("连接中", "Connecting")
-        is ConnectionState.Discovering -> StatusScanning to L10n.t("发现服务", "Discovering")
-        is ConnectionState.Pairing -> StatusScanning to L10n.t("握手中", "Pairing")
-        is ConnectionState.Bonding -> StatusScanning to L10n.t("配对中", "Bonding")
-        is ConnectionState.Error -> StatusError to L10n.t("错误", "Error")
-        is ConnectionState.Idle -> StatusIdle to L10n.t("待机", "Idle")
-    }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = statusColor.copy(alpha = 0.15f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.4f)),
-        modifier = Modifier.padding(horizontal = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            BreathingStatusIndicator(
-                connectionState = connectionState,
-                color = statusColor,
-                dotSize = 6.dp
-            )
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = statusColor
-            )
-        }
-    }
-}
-
 /**
  * Modern Dashboard Card displaying connection state, service background status,
  * and high-precision GPS telemetry details with a one-tap copy button.
@@ -654,7 +545,9 @@ private fun StatusTelemetryCard(
             // Multi-Camera Quick Switch Row (if paired cameras exist)
             if (uiState.savedCameras.isNotEmpty()) {
                 var cameraMenuOpen by remember { mutableStateOf(false) }
-                val activeCameraName = uiState.defaultCameraName ?: uiState.savedCameras.firstOrNull()?.name ?: ""
+                val activeCamera = uiState.savedCameras.firstOrNull { it.name == uiState.defaultCameraName }
+                    ?: uiState.savedCameras.firstOrNull()
+                val activeCameraName = activeCamera?.displayName ?: ""
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -708,7 +601,7 @@ private fun StatusTelemetryCard(
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(cam.name)
+                                                Text(cam.displayName)
                                                 if (cam.name == uiState.defaultCameraName) {
                                                     Text(
                                                         text = L10n.t("[默认]", "[Default]"),
@@ -742,8 +635,8 @@ private fun StatusTelemetryCard(
 
                 if (!gps.enabled) {
                     Text(
-                        text = L10n.t("未开启（连接相机后自动定位并发送）", "Off (auto-starts after connecting)"),
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = L10n.t("GPS 待命 · 连接相机后自动开启高精度卫星定位与持续授时", "GPS Standby · High-precision positioning & sync starts upon connection"),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else if (!gps.hasFix) {
@@ -757,8 +650,8 @@ private fun StatusTelemetryCard(
                             color = NikonYellow
                         )
                         Text(
-                            text = L10n.t("正在搜星定位...", "Acquiring satellite fix..."),
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = L10n.t("正在捕获卫星信号 · 建议移至户外开阔处加速锁定", "Acquiring GNSS satellites · Move to an open sky area for faster lock"),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -870,6 +763,25 @@ private fun StatusTelemetryCard(
                     }
                 }
             }
+
+            val isConnected = uiState.connectionState is ConnectionState.Ready || uiState.connectionState is ConnectionState.Busy
+            if (!isConnected && uiState.savedCameras.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = L10n.t(
+                            "💡 提示：开启相机蓝牙，相机将自动监听并与手机极速握手连接。",
+                            "💡 Tip: Turn on camera Bluetooth; it will automatically handshake and connect."
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -894,7 +806,7 @@ private fun MetricPill(label: String, value: String) {
 }
 
 /**
- * 2x2 Action Control Grid that organizes actions compactly for all screen sizes.
+ * Action Control Grid that adapts between 1-hop quick reconnect and active shooting controls.
  */
 @Composable
 private fun ActionControlGrid(
@@ -904,53 +816,101 @@ private fun ActionControlGrid(
     connectionInProgress: Boolean,
     onPairClick: () -> Unit,
     onConnectClick: () -> Unit,
+    onQuickReconnectClick: (PairedCamera) -> Unit,
     onSendClick: () -> Unit,
     onDisconnectClick: () -> Unit
 ) {
+    val targetCam = uiState.savedCameras.firstOrNull { it.name == uiState.defaultCameraName }
+        ?: uiState.savedCameras.firstOrNull()
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        if (connected) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActionButton(
+                    text = "📡 " + L10n.t("立即发送 GPS", "Send GPS Now"),
+                    enabled = uiState.connectionState is ConnectionState.Ready,
+                    isPrimary = true,
+                    onClick = onSendClick,
+                    modifier = Modifier.weight(1f)
+                )
+                ActionButton(
+                    text = "✕ " + L10n.t("断开连接", "Disconnect"),
+                    enabled = true,
+                    isDanger = true,
+                    onClick = onDisconnectClick,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else if (connectionInProgress) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActionButton(
+                    text = L10n.t("正在连接...", "Connecting..."),
+                    enabled = false,
+                    loading = true,
+                    modifier = Modifier.weight(1.3f),
+                    onClick = {}
+                )
+                ActionButton(
+                    text = "✕ " + L10n.t("取消", "Cancel"),
+                    enabled = true,
+                    isDanger = true,
+                    onClick = onDisconnectClick,
+                    modifier = Modifier.weight(0.7f)
+                )
+            }
+        } else if (targetCam != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActionButton(
+                    text = "⚡ " + L10n.t("重新连接 (${targetCam.displayName})", "Reconnect (${targetCam.displayName})"),
+                    enabled = pairingButtonsEnabled,
+                    isPrimary = true,
+                    onClick = { onQuickReconnectClick(targetCam) },
+                    modifier = Modifier.weight(1.3f)
+                )
+                ActionButton(
+                    text = L10n.t("相机管理", "Manage"),
+                    enabled = pairingButtonsEnabled,
+                    onClick = onConnectClick,
+                    modifier = Modifier.weight(0.7f)
+                )
+            }
             ActionButton(
-                text = L10n.t("配对新相机", "Pair New"),
+                text = "🔍 " + L10n.t("配对新相机", "Pair New Camera"),
                 enabled = pairingButtonsEnabled,
-                loading = uiState.connectionState is ConnectionState.Scanning,
                 onClick = onPairClick,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxWidth()
             )
-            ActionButton(
-                text = L10n.t("连接已保存", "Connect Saved"),
-                enabled = pairingButtonsEnabled,
-                loading = uiState.connectionState is ConnectionState.Connecting ||
-                    uiState.connectionState is ConnectionState.Discovering ||
-                    uiState.connectionState is ConnectionState.Pairing ||
-                    uiState.connectionState is ConnectionState.Bonding,
-                onClick = onConnectClick,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ActionButton(
-                text = L10n.t("立即发送 GPS", "Send GPS Now"),
-                enabled = uiState.connectionState is ConnectionState.Ready,
-                isPrimary = true,
-                onClick = onSendClick,
-                modifier = Modifier.weight(1f)
-            )
-            ActionButton(
-                text = L10n.t("断开连接", "Disconnect"),
-                enabled = connected || connectionInProgress,
-                isDanger = true,
-                onClick = onDisconnectClick,
-                modifier = Modifier.weight(1f)
-            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActionButton(
+                    text = "🔍 " + L10n.t("配对新相机", "Pair New"),
+                    enabled = pairingButtonsEnabled,
+                    isPrimary = true,
+                    onClick = onPairClick,
+                    modifier = Modifier.weight(1f)
+                )
+                ActionButton(
+                    text = L10n.t("相机管理", "Manage"),
+                    enabled = pairingButtonsEnabled,
+                    onClick = onConnectClick,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1161,6 +1121,10 @@ private fun AdvancedSettingsPage(
     isTrackLoggingEnabled: Boolean,
     onTrackLoggingEnabledChange: (Boolean) -> Unit,
     onExportGpx: () -> Unit,
+    batteryExempt: Boolean,
+    onBatteryClick: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+    uiState: MainViewModel.UiState,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -1225,9 +1189,16 @@ private fun AdvancedSettingsPage(
                     onExportGpx = onExportGpx
                 )
 
+                // Section 3: Battery Optimization Settings
+                BatteryExemptionCard(
+                    batteryExempt = batteryExempt,
+                    onBatteryClick = onBatteryClick,
+                    onOpenAppSettings = onOpenAppSettings
+                )
+
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-                // Section 3: SnapBridge Compatibility & Identity
+                // Section 4: SnapBridge Compatibility & Identity
                 Text(
                     text = L10n.t("相机标识与 SnapBridge 兼容", "Camera Identity & SnapBridge"),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -1252,6 +1223,16 @@ private fun AdvancedSettingsPage(
                     value = fixedDeviceId,
                     onValueChange = onFixedDeviceIdChange,
                     modifier = Modifier.fillMaxWidth()
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                // Section 5: Real-time Communication Logs
+                EventsTerminalCard(
+                    uiState = uiState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 340.dp)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

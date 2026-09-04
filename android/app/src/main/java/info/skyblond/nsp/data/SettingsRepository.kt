@@ -120,6 +120,16 @@ class SettingsRepository(context: Context) {
         store(current)
     }
 
+    fun renameCamera(camera: PairedCamera, newCustomName: String?) {
+        val current = loadSavedCameras().toMutableList()
+        val index = current.indexOfFirst { it.name == camera.name }
+        if (index != -1) {
+            val updated = current[index].copy(customName = newCustomName?.trim()?.takeIf { it.isNotBlank() })
+            current[index] = updated
+            store(current)
+        }
+    }
+
     /**
      * GPS send interval in seconds.
      * Common options: 15 (high-res), 30 (balanced/default), 60 (battery saver), 300 (ultra endurance).

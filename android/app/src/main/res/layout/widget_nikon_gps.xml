@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/bg_widget_card">
+
+    <!-- Top Header Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Nikon Yellow Bar Accent -->
+        <View
+            android:layout_width="3dp"
+            android:layout_height="14dp"
+            android:background="#FFE500" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="NIKON GPS"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- Status Text -->
+        <TextView
+            android:id="@+id/widget_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="● 未连接"
+            android:textColor="#9E9E9E"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Target Camera & Telemetry -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:id="@+id/widget_camera_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📷 未选择相机"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true" />
+
+        <TextView
+            android:id="@+id/widget_telemetry_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="GPS 待命 · 等待连接相机"
+            android:textColor="#8C9098"
+            android:textSize="10sp"
+            android:singleLine="true" />
+    </LinearLayout>
+
+    <!-- Action Buttons Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/widget_btn_action"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:text="一键连接"
+            android:textColor="#000000"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:background="@drawable/bg_widget_btn_primary" />
+
+        <Button
+            android:id="@+id/widget_btn_open"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="打开"
+            android:textColor="#D0D0D0"
+            android:textSize="11sp"
+            android:background="@drawable/bg_widget_btn_outline" />
+    </LinearLayout>
+</LinearLayout>

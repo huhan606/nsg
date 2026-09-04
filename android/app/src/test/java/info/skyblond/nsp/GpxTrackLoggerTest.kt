@@ -34,4 +34,22 @@ class GpxTrackLoggerTest {
         assertEquals(0, GpxTrackLogger.pointCount())
         assertNull(GpxTrackLogger.buildGpxXml())
     }
+
+    @Test
+    fun stationaryJitterIsFilteredOut() {
+        // First fix at (35.689500, 139.691700)
+        val added1 = GpxTrackLogger.addPoint(35.689500, 139.691700, 45.0, 10000L)
+        assertTrue(added1)
+        assertEquals(1, GpxTrackLogger.pointCount())
+
+        // Micro-jitter: ~1 meter away 2 seconds later -> should be filtered out
+        val added2 = GpxTrackLogger.addPoint(35.689508, 139.691700, 45.0, 12000L)
+        org.junit.Assert.assertFalse(added2)
+        assertEquals(1, GpxTrackLogger.pointCount())
+
+        // Significant movement: ~50 meters away -> should be recorded
+        val added3 = GpxTrackLogger.addPoint(35.690000, 139.691700, 45.0, 15000L)
+        assertTrue(added3)
+        assertEquals(2, GpxTrackLogger.pointCount())
+    }
 }

@@ -10,6 +10,10 @@ import java.util.Collections
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class TrackPoint(
     val latitude: Double,
@@ -20,21 +24,47 @@ data class TrackPoint(
 
 /**
  * Lightweight GPX 1.1 track recorder for photography field logs.
+ * Includes deadband and accuracy filtering to prevent stationary GPS jitter/drift.
  */
 object GpxTrackLogger {
 
+    /** Minimum displacement in meters required to record a new moving point (avoids stationary GNSS drift). */
+    const val MIN_MOVE_DISTANCE_METERS = 4.5
+
+    /** Discard fixes with poor accuracy (>25m) to avoid erratic spikes. */
+    const val MAX_ALLOWABLE_ACCURACY_METERS = 25.0f
+
+    /** Max time (5 minutes) before a stationary point is recorded as a dwell milestone. */
+    const val STATIONARY_DWELL_INTERVAL_MS = 5 * 60 * 1000L
+
     private val points = Collections.synchronizedList(mutableListOf<TrackPoint>())
 
-    fun addPoint(latitude: Double, longitude: Double, altitude: Double, timeEpochMs: Long = System.currentTimeMillis()) {
-        points.add(TrackPoint(latitude, longitude, altitude, timeEpochMs))
+    fun addPoint(latitude: Double, longitude: Double, altitude: Double, timeEpochMs: Long = System.currentTimeMillis()): Boolean {
+        synchronized(points) {
+            val last = points.lastOrNull()
+            if (last != null) {
+                val dist = haversineMeters(last.latitude, last.longitude, latitude, longitude)
+                val timeDelta = timeEpochMs - last.timeEpochMs
+                // Filter out small jitter if within stationary deadband and not past dwell interval
+                if (dist < MIN_MOVE_DISTANCE_METERS && timeDelta < STATIONARY_DWELL_INTERVAL_MS) {
+                    return false
+                }
+            }
+            points.add(TrackPoint(latitude, longitude, altitude, timeEpochMs))
+            return true
+        }
     }
 
-    fun addPoint(location: Location) {
-        addPoint(
+    fun addPoint(location: Location): Boolean {
+        if (location.hasAccuracy() && location.accuracy > MAX_ALLOWABLE_ACCURACY_METERS) {
+            return false
+        }
+        val timeMs = if (location.time > 0) location.time else System.currentTimeMillis()
+        return addPoint(
             latitude = location.latitude,
             longitude = location.longitude,
             altitude = location.altitude,
-            timeEpochMs = if (location.time > 0) location.time else System.currentTimeMillis()
+            timeEpochMs = timeMs
         )
     }
 
@@ -43,6 +73,20 @@ object GpxTrackLogger {
     }
 
     fun pointCount(): Int = points.size
+
+    /**
+     * Calculates great-circle distance between two coordinates in meters.
+     */
+    fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371000.0 // Earth radius in meters
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+            sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return r * c
+    }
 
     fun buildGpxXml(): String? {
         val currentPoints = synchronized(points) { points.toList() }
